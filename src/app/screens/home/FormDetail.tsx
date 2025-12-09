@@ -190,7 +190,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       data: formData,
       schemaHash,
       status: 'pending' as 'pending' | 'submitted' | 'failed',
-      is_submittable: doctype.data.is_submittable,
+      is_submittable: doctype.data?.is_submittable ?? 0,
     };
 
     setLoading(true);
@@ -203,7 +203,8 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       setTimeout(() => {
         navigation.goBack();
       }, 100);
-    } catch (e) {
+    } catch (error) {
+      console.error('Error submitting form:', error);
       Alert.alert(t('common.error'), t('formDetail.errorSaving'));
       isSubmittedRef.current = false;
     } finally {
