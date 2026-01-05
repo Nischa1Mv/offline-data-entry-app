@@ -63,15 +63,70 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
   const isFieldEnabled = useCallback((field: RawField) => {
     if (!field.depends_on) return true;
 
-    if (field.depends_on.startsWith('eval:doc.')) {
-      const regex = /^eval:doc\.([a-zA-Z0-9_]+)\s*==\s*["'](.+)["']$/;
-      const match = field.depends_on.match(regex);
-      if (match) {
-        const [_, fieldName, expectedValue] = match;
-        return formData[fieldName] === expectedValue;
+    if (field.depends_on.startsWith('eval:')) {
+      try {
+        // Remove 'eval:' prefix
+        let expression = field.depends_on.substring(5).trim();
+        
+        // Replace 'doc.' with actual formData values
+        // First, find all unique field references
+        const fieldMatches = expression.matchAll(/doc\.([a-zA-Z0-9_]+)/g);
+        const fieldReplacements: Record<string, string> = {};
+        
+        for (const match of fieldMatches) {
+          const fieldName = match[1];
+          const fieldValue = formData[fieldName];
+          // Store the value to replace later
+          if (!fieldReplacements[fieldName]) {
+            fieldReplacements[fieldName] = fieldValue || '';
+          }
+        }
+        
+        // Now evaluate by splitting on OR conditions
+        const orConditions = expression.split('||').map(cond => cond.trim());
+        
+        // Check if any OR condition is true
+        const result = orConditions.some(condition => {
+          // Split by AND operator (&&)
+          const andConditions = condition.split('&&').map(cond => cond.trim());
+          
+          // All AND conditions must be true
+          return andConditions.every(andCond => {
+            // Match pattern: doc.fieldname == "value"
+            const regex = /doc\.([a-zA-Z0-9_]+)\s*==\s*["']([^"']*)["']/;
+            const match = andCond.match(regex);
+            
+            if (match) {
+              const [_, fieldName, expectedValue] = match;
+              const actualValue = formData[fieldName];
+              const matches = actualValue === expectedValue;
+              
+              // Debug logging
+              console.log('Depends_on check:', {
+                fieldLabel: field.label,
+                condition: andCond,
+                fieldName,
+                expectedValue,
+                actualValue,
+                matches
+              });
+              
+              return matches;
+            }
+            
+            console.log('Depends_on regex no match:', andCond);
+            return false;
+          });
+        });
+        
+        console.log('Final result for', field.label, ':', result);
+        return result;
+      } catch (error) {
+        console.error('Error evaluating depends_on:', field.depends_on, error);
+        return false;
       }
-      return false;
     }
+    
     return true;
   }, [formData]);
 
@@ -385,6 +440,10 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
             </Text>
             <View className="flex-col">
               {fields.map((field, index) => {
+                // Check if field should be visible based on depends_on
+                const isEnabled = isFieldEnabled(field);
+                if (!isEnabled) return null;
+
                 const isSelectField =
                   field.fieldtype === 'Select' && field.options;
                 const optionsList =
@@ -416,7 +475,6 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     {isSelectField ? (
                       <SelectDropdown
                         formData={formData}
-                        dependsOn={field.depends_on || undefined}
                         options={optionsList}
                         value={selectedValue}
                         onValueChange={value =>
