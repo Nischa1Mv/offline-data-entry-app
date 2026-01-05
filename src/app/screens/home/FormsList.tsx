@@ -37,6 +37,8 @@ export interface FormItem {
 const additionalDoctype = [
   'Combating Malnutrition Basic Data',
   'PGS Peer Appraisal Basic Data',
+  'Nutri Garden Household Nutrition Survey Tool',
+  'Data Registers Farmer Transition to NF',
   'Testing DocType',
 ];
 
@@ -177,10 +179,14 @@ const FormsList = () => {
           });
         }}
       >
-        <Text className="text-base font-normal" style={{ color: theme.text }}>
+        <Text
+          className="flex-1 text-base font-normal mr-3"
+          style={{ color: theme.text }}
+          numberOfLines={2}
+        >
           {item.name}
         </Text>
-        <View className="flex-row items-center">
+        <View className="flex-row items-center flex-shrink-0">
           {isConnected &&
             (itemState.isDownloading ? (
               <ActivityIndicator size="small" color={theme.buttonBackground} />
