@@ -32,6 +32,7 @@ import LinkDropdown from '../../components/LinkDropdown';
 import SelectDropdown from '../../components/SelectDropdown';
 import TableField from '../../components/TableField';
 import CurrencyInput from '../../components/fields/CurrencyInput';
+import PhoneInput from '../../components/fields/PhoneInput';
 import { enqueue } from '../../pendingQueue';
 
 type FormDetailRouteProp = RouteProp<HomeStackParamList, 'FormDetail'>;
@@ -571,6 +572,16 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                         })}
                         value={formData[field.fieldname] || ''}
                         onChangeText={text =>
+                          handleChange(field.fieldname, text)
+                        }
+                      />
+                    ) : isPhoneField ? (
+                      <PhoneInput
+                        placeholder={t('formDetail.enterPlaceholder', {
+                          label: field.label || field.fieldname,
+                        })}
+                        value={formData[field.fieldname] || ''}
+                        onChangeText={(text: string) =>
                           handleChange(field.fieldname, text)
                         }
                       />
