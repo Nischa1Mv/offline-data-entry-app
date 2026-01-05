@@ -31,6 +31,7 @@ import LanguageControl from '../../components/LanguageControl';
 import LinkDropdown from '../../components/LinkDropdown';
 import SelectDropdown from '../../components/SelectDropdown';
 import TableField from '../../components/TableField';
+import CurrencyInput from '../../components/fields/CurrencyInput';
 import { enqueue } from '../../pendingQueue';
 
 type FormDetailRouteProp = RouteProp<HomeStackParamList, 'FormDetail'>;
@@ -169,6 +170,12 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
           'Link',
           'Date',
           'Table',
+          'Check',
+          'Phone',
+          'Currency',
+          'Heading',
+          'Section Break',
+
         ].includes(field.fieldtype);
       });
 
@@ -459,6 +466,11 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                 const selectedValue = formData[field.fieldname];
                 const isNumericField =
                   field.fieldtype === 'Int' || field.fieldtype === 'Float';
+                const isCurrencyField = field.fieldtype === 'Currency';
+                const isPhoneField = field.fieldtype === 'Phone';
+                const isCheckField = field.fieldtype === 'Check';
+                const isHeading = field.fieldtype === 'Heading';
+                const isSectionBreak = field.fieldtype === 'Section Break';
 
                 return (
                   <View
@@ -551,6 +563,16 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                             );
                           }
                         }}
+                      />
+                    ) : isCurrencyField ? (
+                      <CurrencyInput
+                        placeholder={t('formDetail.enterPlaceholder', {
+                          label: field.label || field.fieldname,
+                        })}
+                        value={formData[field.fieldname] || ''}
+                        onChangeText={text =>
+                          handleChange(field.fieldname, text)
+                        }
                       />
                     ) : (
                       <TextInput
