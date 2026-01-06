@@ -487,13 +487,13 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                         className="font-sans text-sm font-medium leading-5 tracking-normal"
                         style={{ color: theme.text }}
                       >
-                        {field.label || field.fieldname}
+                        {field.label}
                       </Text>
                     )}
                     {isSectionBreak ? (
-                      <SectionBreak label={field.label || field.fieldname} />
+                      <SectionBreak label={field.label } />
                     ) : isHeading ? (
-                      <HeadingText label={field.label || field.fieldname} />
+                      <HeadingText label={field.label } />
                     ) : isSelectField ? (
                       <SelectDropdown
                         formData={formData}
@@ -503,7 +503,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           handleChange(field.fieldname, value)
                         }
                         placeholder={t('formDetail.selectPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         isOpen={isOpen}
                         onToggle={() => toggleDropdown(field.fieldname)}
@@ -517,7 +517,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           handleChange(field.fieldname, value)
                         }
                         placeholder={t('formDetail.selectPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         isOpen={isOpen}
                         onToggle={() => toggleDropdown(field.fieldname)}
@@ -530,7 +530,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           handleChange(field.fieldname, value)
                         }
                         placeholder={t('formDetail.selectPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                       />
                     ) : isTableField ? (
@@ -540,14 +540,14 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           (navigation as any).navigate('TableRowEditor', {
                             fieldname: field.fieldname,
                             tableDoctype: (field.options as string) || '',
-                            title: field.label || field.fieldname,
+                            title: field.label,
                           })
                         }
                         onEditRow={rowIndex =>
                           (navigation as any).navigate('TableRowEditor', {
                             fieldname: field.fieldname,
                             tableDoctype: (field.options as string) || '',
-                            title: field.label || field.fieldname,
+                            title: field.label,
                             index: rowIndex,
                             initialRow:
                               Array.isArray(selectedValue) &&
@@ -577,7 +577,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     ) : isCurrencyField ? (
                       <CurrencyInput
                         placeholder={t('formDetail.enterPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         value={formData[field.fieldname] || ''}
                         onChangeText={text =>
@@ -587,7 +587,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     ) : isPhoneField ? (
                       <PhoneInput
                         placeholder={t('formDetail.enterPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         value={formData[field.fieldname] || ''}
                         onChangeText={(text: string) =>
@@ -611,7 +611,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           color: theme.text,
                         }}
                         placeholder={t('formDetail.enterPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         placeholderTextColor={theme.subtext}
                         value={formData[field.fieldname] || ''}
