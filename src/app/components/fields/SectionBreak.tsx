@@ -10,7 +10,14 @@ const SectionBreak: React.FC<SectionBreakProps> = ({ label }) => {
   const { theme } = useTheme();
 
   if (!label || label.trim() === '') {
-    return null;
+    return (
+      <View className="mb-2 mt-4">
+        <View
+          className="h-px w-full"
+          style={{ backgroundColor: theme.border }}
+        />
+      </View>
+    );
   }
 
   return (

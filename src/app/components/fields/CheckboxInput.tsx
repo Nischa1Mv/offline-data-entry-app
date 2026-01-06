@@ -40,7 +40,7 @@ const CheckboxInput: React.FC<CheckboxInputProps> = ({
         {isChecked && <Check size={16} color={theme.buttonText} />}
       </View>
       {label && (
-        <Text className="text-sm" style={{ color: theme.subtext }}>
+        <Text className="font-sans text-sm font-medium leading-5 tracking-normal" style={{ color: theme.text }}>
           {label}
         </Text>
       )}
