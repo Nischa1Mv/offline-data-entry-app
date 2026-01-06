@@ -31,6 +31,7 @@ import LanguageControl from '../../components/LanguageControl';
 import LinkDropdown from '../../components/LinkDropdown';
 import SelectDropdown from '../../components/SelectDropdown';
 import TableField from '../../components/TableField';
+import CheckboxInput from '../../components/fields/CheckboxInput';
 import CurrencyInput from '../../components/fields/CurrencyInput';
 import PhoneInput from '../../components/fields/PhoneInput';
 import { enqueue } from '../../pendingQueue';
@@ -69,12 +70,12 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       try {
         // Remove 'eval:' prefix
         let expression = field.depends_on.substring(5).trim();
-        
+
         // Replace 'doc.' with actual formData values
         // First, find all unique field references
         const fieldMatches = expression.matchAll(/doc\.([a-zA-Z0-9_]+)/g);
         const fieldReplacements: Record<string, string> = {};
-        
+
         for (const match of fieldMatches) {
           const fieldName = match[1];
           const fieldValue = formData[fieldName];
@@ -83,26 +84,26 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
             fieldReplacements[fieldName] = fieldValue || '';
           }
         }
-        
+
         // Now evaluate by splitting on OR conditions
         const orConditions = expression.split('||').map(cond => cond.trim());
-        
+
         // Check if any OR condition is true
         const result = orConditions.some(condition => {
           // Split by AND operator (&&)
           const andConditions = condition.split('&&').map(cond => cond.trim());
-          
+
           // All AND conditions must be true
           return andConditions.every(andCond => {
             // Match pattern: doc.fieldname == "value"
             const regex = /doc\.([a-zA-Z0-9_]+)\s*==\s*["']([^"']*)["']/;
             const match = andCond.match(regex);
-            
+
             if (match) {
               const [_, fieldName, expectedValue] = match;
               const actualValue = formData[fieldName];
               const matches = actualValue === expectedValue;
-              
+
               // Debug logging
               console.log('Depends_on check:', {
                 fieldLabel: field.label,
@@ -112,15 +113,15 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                 actualValue,
                 matches
               });
-              
+
               return matches;
             }
-            
+
             console.log('Depends_on regex no match:', andCond);
             return false;
           });
         });
-        
+
         console.log('Final result for', field.label, ':', result);
         return result;
       } catch (error) {
@@ -128,7 +129,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
         return false;
       }
     }
-    
+
     return true;
   }, [formData]);
 
@@ -212,7 +213,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       const isEnabled = isFieldEnabled(field);
       const isEmpty = !formData[field.fieldname] ||
         formData[field.fieldname].toString().trim() === '';
-      
+
       // Only report as missing if the field is enabled AND empty
       return isEnabled && isEmpty;
     });
@@ -253,7 +254,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       data: formData,
       schemaHash,
       status: 'pending' as 'pending' | 'submitted' | 'failed',
-      is_submittable: doctype.data.is_submittable 
+      is_submittable: doctype.data.is_submittable
     };
     setLoading(true);
     setConfirmModalVisible(false);
@@ -584,6 +585,14 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                         onChangeText={(text: string) =>
                           handleChange(field.fieldname, text)
                         }
+                      />
+                    ) : isCheckField ? (
+                      <CheckboxInput
+                        value={formData[field.fieldname]}
+                        onValueChange={value =>
+                          handleChange(field.fieldname, value)
+                        }
+                        label={field.label || t('formDetail.checkboxLabel')}
                       />
                     ) : (
                       <TextInput
