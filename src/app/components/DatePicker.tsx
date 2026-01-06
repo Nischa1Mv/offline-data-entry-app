@@ -1,18 +1,19 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  Platform,
-  StyleSheet,
-} from 'react-native';
 import DateTimePicker, {
   DateTimePickerAndroid,
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
-import { useTheme } from '../../context/ThemeContext';
+import { Calendar } from 'lucide-react-native';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import {
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 interface DatePickerProps {
   value?: string;
@@ -129,6 +130,7 @@ const DatePicker: React.FC<DatePickerProps> = ({
         >
           {value ? formatDisplayDate(value) : placeholder}
         </Text>
+        <Calendar color={theme.subtext} size={20} />
       </TouchableOpacity>
 
       {Platform.OS === 'ios' && datePickerVisible && (
