@@ -19,6 +19,7 @@ export type RawField = {
   print_hide?: number;
   report_hide?: number;
   depends_on?: string;
+  reqd:number;
 };
 export interface DocType {
   data: Data;

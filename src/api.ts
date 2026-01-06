@@ -638,6 +638,7 @@ export function extractFields(docType: DocType): RawField[] {
     print_hide: field.print_hide,
     report_hide: field.report_hide,
     depends_on: field.depends_on,
+    reqd: field.reqd,
   }));
 }
 

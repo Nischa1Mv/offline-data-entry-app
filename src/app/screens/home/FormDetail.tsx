@@ -215,14 +215,21 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    // Only check fields that are enabled (not disabled by depends_on)
+    // Only check fields that are enabled (not disabled by depends_on) AND required
     const missingFields = fields.filter(field => {
+      // Skip display-only fields (Section Break, Heading)
+      const isDisplayOnly = field.fieldtype === 'Section Break' || field.fieldtype === 'Heading';
+      if (isDisplayOnly) {
+        return false;
+      }
+
       const isEnabled = isFieldEnabled(field);
+      const isRequired = field.reqd === 1;
       const isEmpty = !formData[field.fieldname] ||
         formData[field.fieldname].toString().trim() === '';
 
-      // Only report as missing if the field is enabled AND empty
-      return isEnabled && isEmpty;
+      // Only report as missing if the field is enabled AND required AND empty
+      return isEnabled && isRequired && isEmpty;
     });
 
     if (missingFields.length > 0) {
@@ -236,10 +243,6 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    if (Object.keys(formData).length === 0) {
-      Alert.alert(t('common.error'), t('formDetail.noData'));
-      return;
-    }
     setConfirmModalVisible(true);
   };
 
@@ -480,6 +483,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                 const isCheckField = field.fieldtype === 'Check';
                 const isHeading = field.fieldtype === 'Heading';
                 const isSectionBreak = field.fieldtype === 'Section Break';
+                const isRequired = field.reqd === 1;
 
                 return (
                   <View
@@ -493,12 +497,13 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                         style={{ color: theme.text }}
                       >
                         {field.label}
+                        {isRequired && <Text style={{ color: 'red' }}> *</Text>}
                       </Text>
                     )}
                     {isSectionBreak ? (
-                      <SectionBreak label={field.label } />
+                      <SectionBreak label={field.label} />
                     ) : isHeading ? (
-                      <HeadingText label={field.label } />
+                      <HeadingText label={field.label} />
                     ) : isSelectField ? (
                       <SelectDropdown
                         formData={formData}
