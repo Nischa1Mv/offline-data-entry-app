@@ -482,7 +482,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     className="mb-4"
                     style={{ zIndex: 1000 - index }}
                   >
-                    {!isHeading && !isSectionBreak && (
+                    {!isHeading && !isSectionBreak && !isCheckField && (
                       <Text
                         className="font-sans text-sm font-medium leading-5 tracking-normal"
                         style={{ color: theme.text }}
