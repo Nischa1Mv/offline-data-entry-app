@@ -33,6 +33,7 @@ import SelectDropdown from '../../components/SelectDropdown';
 import TableField from '../../components/TableField';
 import CheckboxInput from '../../components/fields/CheckboxInput';
 import CurrencyInput from '../../components/fields/CurrencyInput';
+import HeadingText from '../../components/fields/HeadingText';
 import PhoneInput from '../../components/fields/PhoneInput';
 import { enqueue } from '../../pendingQueue';
 
@@ -480,13 +481,17 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     className="mb-4"
                     style={{ zIndex: 1000 - index }}
                   >
-                    <Text
-                      className="font-sans text-sm font-medium leading-5 tracking-normal"
-                      style={{ color: theme.text }}
-                    >
-                      {field.label || field.fieldname}
-                    </Text>
-                    {isSelectField ? (
+                    {!isHeading && (
+                      <Text
+                        className="font-sans text-sm font-medium leading-5 tracking-normal"
+                        style={{ color: theme.text }}
+                      >
+                        {field.label || field.fieldname}
+                      </Text>
+                    )}
+                    {isHeading ? (
+                      <HeadingText label={field.label || field.fieldname} />
+                    ) : isSelectField ? (
                       <SelectDropdown
                         formData={formData}
                         options={optionsList}
