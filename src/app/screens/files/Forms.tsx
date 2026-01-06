@@ -753,13 +753,14 @@ function Forms() {
             return (
               <View
                 key={item.id}
-                className="flex w-full flex-row justify-between border px-4 py-4"
+                className="flex w-full flex-row items-center justify-between border px-4 py-2"
                 style={{
                   backgroundColor: theme.background,
                   borderColor: theme.border,
                 }}
               >
                 <TouchableOpacity
+                  className="mr-3 flex-1"
                   onPress={() => {
                     console.log(
                       'Navigating to PreviewForm with formId:',
@@ -784,16 +785,19 @@ function Forms() {
                   </View>
                 </TouchableOpacity>
                 <TouchableOpacity
+                  className="rounded-md border px-3 py-1.5"
+                  style={{
+                    borderColor: theme.pendingBorder,
+                    backgroundColor: theme.cardBackground,
+                  }}
                   onPress={() => handleSubmitSingleForm(formData)}
                 >
-                  <View className="flex h-[40px] w-[117px] items-center justify-center">
                     <Text
-                      className="font-inter text-right text-sm font-medium leading-5"
-                      style={{ color: theme.text }}
+                    className="font-inter text-center text-xs font-medium"
+                    style={{ color: theme.pendingText }}
                     >
                       {t('formsScreen.submitForm')}
                     </Text>
-                  </View>
                 </TouchableOpacity>
               </View>
             );
