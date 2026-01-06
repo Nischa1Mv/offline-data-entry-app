@@ -35,6 +35,7 @@ import CheckboxInput from '../../components/fields/CheckboxInput';
 import CurrencyInput from '../../components/fields/CurrencyInput';
 import HeadingText from '../../components/fields/HeadingText';
 import PhoneInput from '../../components/fields/PhoneInput';
+import SectionBreak from '../../components/fields/SectionBreak';
 import { enqueue } from '../../pendingQueue';
 
 type FormDetailRouteProp = RouteProp<HomeStackParamList, 'FormDetail'>;
@@ -481,7 +482,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     className="mb-4"
                     style={{ zIndex: 1000 - index }}
                   >
-                    {!isHeading && (
+                    {!isHeading && !isSectionBreak && (
                       <Text
                         className="font-sans text-sm font-medium leading-5 tracking-normal"
                         style={{ color: theme.text }}
@@ -489,7 +490,9 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                         {field.label || field.fieldname}
                       </Text>
                     )}
-                    {isHeading ? (
+                    {isSectionBreak ? (
+                      <SectionBreak label={field.label || field.fieldname} />
+                    ) : isHeading ? (
                       <HeadingText label={field.label || field.fieldname} />
                     ) : isSelectField ? (
                       <SelectDropdown
