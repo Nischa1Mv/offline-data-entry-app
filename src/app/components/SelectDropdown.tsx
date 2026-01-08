@@ -37,7 +37,7 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
     <View style={containerStyle}>
       {/* Dropdown Toggle Button */}
       <TouchableOpacity
-        className="h-[40px] w-full flex-row items-center justify-between rounded-md border px-3"
+        className="h-[44px] w-full flex-row items-center justify-between rounded-lg border-[1.5px] px-4"
         style={{
           borderColor: theme.border,
           backgroundColor: theme.background,
@@ -54,7 +54,7 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
         </Text>
 
         <ChevronDown
-          size={16}
+          size={18}
           color={theme.subtext}
           style={{
             transform: [{ rotate: isOpen ? '180deg' : '0deg' }],
@@ -66,17 +66,18 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
       {isOpen && (
         <View
           style={{
-            marginTop: 5,
+            marginTop: 8,
             backgroundColor: theme.dropdownBg,
             borderWidth: 1.5,
             borderColor: theme.border,
-            borderRadius: 8,
-            shadowColor: theme.shadow,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.25,
-            shadowRadius: 8,
-            elevation: 20,
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 8,
             maxHeight: 250,
+            overflow: 'hidden',
           }}
         >
           <ScrollView nestedScrollEnabled={true} style={scrollViewStyle}>
@@ -88,20 +89,22 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
                 return (
                   <TouchableOpacity
                     key={optIndex}
-                    className={`px-4 py-3 ${optIndex < options.length - 1 ? 'border-b' : ''}`}
+                    className={`px-4 py-3.5 ${optIndex < options.length - 1 ? 'border-b' : ''}`}
                     style={{
                       backgroundColor: isSelected
                         ? theme.dropdownSelectedBg
                         : theme.dropdownBg,
                       borderBottomColor:
                         optIndex < options.length - 1 ? theme.border : undefined,
+                      borderBottomWidth: optIndex < options.length - 1 ? 0.5 : 0,
                     }}
                     onPress={() => onValueChange(trimmedOption)}
                   >
                     <Text
                       style={{
                         color: theme.text,
-                        fontWeight: isSelected ? '600' : 'normal',
+                        fontWeight: isSelected ? '600' : '400',
+                        fontSize: 15,
                       }}
                     >
                       {trimmedOption}
