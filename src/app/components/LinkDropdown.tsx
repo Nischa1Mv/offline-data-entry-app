@@ -1,17 +1,17 @@
+import { ChevronDown } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { ChevronDown } from 'lucide-react-native';
-import { useTheme } from '../../context/ThemeContext';
-import { useNetwork } from '../../context/NetworkProvider';
-import { getLinkOptions } from '../../lib/hey-api/client/sdk.gen';
 import { getLinkOptionsFromLocal, saveLinkOptionsToLocal } from '../../api';
+import { useNetwork } from '../../context/NetworkProvider';
+import { useTheme } from '../../context/ThemeContext';
+import { getLinkOptions } from '../../lib/hey-api/client/sdk.gen';
 
 type LinkDropdownProps = {
   doctype: string; // linked doctype to fetch options for
@@ -41,25 +41,7 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
   const hasLoadedRef = useRef(false);
 
   const containerStyle = {
-    position: 'relative' as const,
     zIndex: containerZIndex,
-  };
-
-  const dropdownStyle = {
-    position: 'absolute' as const,
-    top: 45,
-    left: 0,
-    right: 0,
-    zIndex: 2000,
-    backgroundColor: theme.dropdownBg,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    borderRadius: 8,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 20,
   };
 
   const filteredOptions = useMemo(() => {
@@ -75,13 +57,8 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
     [filteredOptions]
   );
 
-  const dropdownMaxHeight = Math.min(
-    Math.max(displayOptions.length, 4) * 48 + 56,
-    480
-  );
-
   const scrollViewStyle = {
-    maxHeight: dropdownMaxHeight - 56,
+    maxHeight: 250,
   };
 
   const normalizedDoctype = useMemo(() => (doctype || '').trim(), [doctype]);
@@ -282,7 +259,21 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
       </TouchableOpacity>
 
       {isOpen && (
-        <View style={{ ...dropdownStyle, maxHeight: dropdownMaxHeight }}>
+        <View
+          style={{
+            marginTop: 5,
+            backgroundColor: theme.dropdownBg,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+            borderRadius: 8,
+            shadowColor: theme.shadow,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+            elevation: 20,
+            maxHeight: 250,
+          }}
+        >
           {loading ? (
             <View className="items-center justify-center px-4 py-6">
               <ActivityIndicator color={theme.subtext} />

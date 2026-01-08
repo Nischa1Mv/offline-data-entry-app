@@ -26,26 +26,7 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
   const { theme } = useTheme();
 
   const containerStyle = {
-    position: 'relative' as const,
     zIndex: containerZIndex,
-  };
-
-  const dropdownStyle = {
-    position: 'absolute' as const,
-    top: 45,
-    left: 0,
-    right: 0,
-    zIndex: 2000,
-    backgroundColor: theme.dropdownBg,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    borderRadius: 8,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 20,
-    maxHeight: 250,
   };
 
   const scrollViewStyle = {
@@ -81,9 +62,23 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
         />
       </TouchableOpacity>
 
-      {/* Dropdown Options - Always render structure, only open if isOpen */}
+      {/* Pushes content down when open */}
       {isOpen && (
-        <View style={dropdownStyle}>
+        <View
+          style={{
+            marginTop: 5,
+            backgroundColor: theme.dropdownBg,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+            borderRadius: 8,
+            shadowColor: theme.shadow,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.25,
+            shadowRadius: 8,
+            elevation: 20,
+            maxHeight: 250,
+          }}
+        >
           <ScrollView nestedScrollEnabled={true} style={scrollViewStyle}>
             {options.length > 0 ? (
               options.map((option: string, optIndex: number) => {
