@@ -1,30 +1,35 @@
+import { FormStackParamList } from '@/app/navigation/FormStackParamList';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ArrowLeft } from 'lucide-react-native';
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Modal,
-  TouchableOpacity,
-  View,
+  ScrollView,
   Text,
   TextInput,
-  ScrollView,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import LanguageControl from '../../components/LanguageControl';
-import SelectDropdown from '../../components/SelectDropdown';
-import LinkDropdown from '../../components/LinkDropdown';
-import DatePicker from '../../components/DatePicker';
-import TableField from '../../components/TableField';
-import { useTranslation } from 'react-i18next';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
-import { SubmissionItem, RawField } from '../../../types';
-import { getQueue, removeFromQueue } from '../../pendingQueue';
-import { FormStackParamList } from '@/app/navigation/FormStackParamList';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../../../context/ThemeContext';
 import { extractFields, getDocTypeFromLocal } from '../../../api';
+import { useTheme } from '../../../context/ThemeContext';
 import { usePendingFormsExport } from '../../../hooks/usePendingFormsExport';
+import { RawField, SubmissionItem } from '../../../types';
+import DatePicker from '../../components/DatePicker';
+import LanguageControl from '../../components/LanguageControl';
+import LinkDropdown from '../../components/LinkDropdown';
+import SelectDropdown from '../../components/SelectDropdown';
+import TableField from '../../components/TableField';
+import CheckboxInput from '../../components/fields/CheckboxInput';
+import CurrencyInput from '../../components/fields/CurrencyInput';
+import HeadingText from '../../components/fields/HeadingText';
+import PhoneInput from '../../components/fields/PhoneInput';
+import SectionBreak from '../../components/fields/SectionBreak';
+import { getQueue, removeFromQueue } from '../../pendingQueue';
 
 type PreviewFormRouteProp = RouteProp<FormStackParamList, 'PreviewForm'>;
 type PreviewFormNavigationProp = NativeStackNavigationProp<
@@ -373,300 +378,211 @@ function PreviewForm() {
     'Link',
     'Date',
     'Table',
+    'Check',
+    'Phone',
+    'Currency',
+    'Heading',
+    'Section Break',
+
   ];
+
   const fieldsToRender =
     formFields.length > 0
       ? formFields
-          .filter(field => {
-            // Skip if hidden, print_hide, or report_hide is true (value is 1 or truthy)
-            if (field.hidden || field.print_hide || field.report_hide) {
-              return false;
-            }
-            return allowedFieldTypes.includes(field.fieldtype || 'Data');
-          })
-          .map(field => ({
-            fieldname: field.fieldname,
-            label:
-              field.label ||
-              field.fieldname.charAt(0).toUpperCase() +
-                field.fieldname.slice(1).replace(/([A-Z])/g, ' $1'),
-            fieldtype: field.fieldtype || 'Data',
-            options: field.options,
-            value: formData[field.fieldname],
-          }))
-      : Object.keys(formData).map(key => ({
-          fieldname: key,
+        .filter(field => {
+          // Skip if hidden, print_hide, or report_hide is true (value is 1 or truthy)
+          if (field.hidden || field.print_hide || field.report_hide) {
+            return false;
+          }
+          return allowedFieldTypes.includes(field.fieldtype || 'Data');
+        })
+        .map(field => ({
+          fieldname: field.fieldname,
           label:
-            key.charAt(0).toUpperCase() +
-            key.slice(1).replace(/([A-Z])/g, ' $1'),
-          fieldtype: typeof formData[key] === 'boolean' ? 'Check' : 'Data',
-          options: undefined,
-          value: formData[key],
-        }));
+            field.label ||
+            field.fieldname.charAt(0).toUpperCase() +
+            field.fieldname.slice(1).replace(/([A-Z])/g, ' $1'),
+          fieldtype: field.fieldtype || 'Data',
+          options: field.options,
+          value: formData[field.fieldname],
+        }))
+      : Object.keys(formData).map(key => ({
+        fieldname: key,
+        label:
+          key.charAt(0).toUpperCase() +
+          key.slice(1).replace(/([A-Z])/g, ' $1'),
+        fieldtype: typeof formData[key] === 'boolean' ? 'Check' : 'Data',
+        options: undefined,
+        value: formData[key],
+      }));
 
   // Helper function to render field based on type
   const renderField = (field: any, index: number = 0) => {
-    const { fieldname, label, fieldtype, options, value } = field;
+    const { fieldname, label, fieldtype, options, value, reqd } = field;
     const isOpen = dropdownStates[fieldname] || false;
+    const isRequired = reqd === 1;
 
-    switch (fieldtype) {
-      case 'Select':
-        if (options) {
-          const optionsList = options
-            .split('\n')
-            .filter((opt: string) => opt.trim());
-
-          return (
-            <View
-              key={fieldname}
-              className="mb-4"
-              style={{ zIndex: 1000 - index }}
-            >
-              <Text
-                className="font-sans text-sm font-medium leading-5 tracking-normal"
-                style={{ color: theme.text }}
-              >
-                {label}
-              </Text>
-              <SelectDropdown
-                options={optionsList}
-                value={value}
-                onValueChange={val => handleChange(fieldname, val)}
-                placeholder={t('formDetail.selectPlaceholder', {
-                  label: label,
-                })}
-                isOpen={isOpen}
-                onToggle={() => toggleDropdown(fieldname)}
-                containerZIndex={1000 - index}
-              />
-            </View>
-          );
-        }
-        // Fallback to text input if no options
-        return (
-          <View key={fieldname} className="mb-4">
-            <Text
-              className="font-sans text-sm font-medium leading-5 tracking-normal"
-              style={{ color: theme.text }}
-            >
-              {label}
-            </Text>
-            <TextInput
-              className="h-[40px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
-              style={{
-                borderColor: theme.border,
-                backgroundColor: theme.background,
-                color: theme.text,
-              }}
-              placeholder={label}
-              placeholderTextColor={theme.subtext}
-              value={String(value || '')}
-              onChangeText={text => handleChange(fieldname, text)}
-              editable={true}
-            />
-          </View>
-        );
-
-      case 'Link':
-        if (options) {
-          return (
-            <View
-              key={fieldname}
-              className="mb-4"
-              style={{ zIndex: 1000 - index }}
-            >
-              <Text
-                className="font-sans text-sm font-medium leading-5 tracking-normal"
-                style={{ color: theme.text }}
-              >
-                {label}
-              </Text>
-              <LinkDropdown
-                doctype={options as string}
-                value={value}
-                onValueChange={val => handleChange(fieldname, val)}
-                placeholder={t('formDetail.selectPlaceholder', {
-                  label: label,
-                })}
-                isOpen={isOpen}
-                onToggle={() => toggleDropdown(fieldname)}
-                containerZIndex={1000 - index}
-              />
-            </View>
-          );
-        }
-        // Fallback to text input if no doctype
-        return (
-          <View key={fieldname} className="mb-4">
-            <Text
-              className="font-sans text-sm font-medium leading-5 tracking-normal"
-              style={{ color: theme.text }}
-            >
-              {label}
-            </Text>
-            <TextInput
-              className="h-[40px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
-              style={{
-                borderColor: theme.border,
-                backgroundColor: theme.background,
-                color: theme.text,
-              }}
-              placeholder={label}
-              placeholderTextColor={theme.subtext}
-              value={String(value || '')}
-              onChangeText={text => handleChange(fieldname, text)}
-              editable={true}
-            />
-          </View>
-        );
-
-      case 'Date':
-        return (
-          <View key={fieldname} className="mb-4">
-            <Text
-              className="font-sans text-sm font-medium leading-5 tracking-normal"
-              style={{ color: theme.text }}
-            >
-              {label}
-            </Text>
-            <DatePicker
-              value={value}
-              onValueChange={val => handleChange(fieldname, val)}
-              placeholder={t('formDetail.selectPlaceholder', {
-                label: label,
-              })}
-            />
-          </View>
-        );
-
-      case 'Check':
-        const checkBoxStyle = {
-          backgroundColor: value ? theme.buttonBackground : 'transparent',
-          borderColor: value ? theme.buttonBackground : theme.border,
-        };
-        return (
-          <View key={fieldname} className="mb-4">
-            <TouchableOpacity
-              className="flex-row items-center"
-              onPress={() => handleChange(fieldname, !value)}
-            >
-              <View
-                className="mr-3 flex h-5 w-5 items-center justify-center rounded border-2"
-                style={checkBoxStyle}
-              >
-                {value && (
-                  <Text className="text-xs" style={{ color: theme.buttonText }}>
-                    ✓
-                  </Text>
-                )}
-              </View>
-              <Text
-                className="font-sans text-sm font-medium leading-5 tracking-normal"
-                style={{ color: theme.text }}
-              >
-                {label}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        );
-
-      case 'Text':
-        return (
-          <View key={fieldname} className="mb-4">
-            <Text
-              className="font-sans text-sm font-medium leading-5 tracking-normal"
-              style={{ color: theme.text }}
-            >
-              {label}
-            </Text>
-            <TextInput
-              className="min-h-[80px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
-              style={{
-                borderColor: theme.border,
-                backgroundColor: theme.background,
-                color: theme.text,
-              }}
-              placeholder={label}
-              placeholderTextColor={theme.subtext}
-              value={String(value || '')}
-              onChangeText={text => handleChange(fieldname, text)}
-              multiline={true}
-              textAlignVertical="top"
-              editable={true}
-            />
-          </View>
-        );
-
-      case 'Table': {
-        const tableSchema = tableSchemas[fieldname];
-        return (
-          <View key={fieldname} className="mb-4">
-            <Text
-              className="font-sans text-sm font-medium leading-5 tracking-normal"
-              style={{ color: theme.text }}
-            >
-              {label}
-            </Text>
-            <TableField
-              value={value}
-              onAddRow={undefined}
-              onEditRow={rowIndex =>
-                // @ts-ignore
-                (navigation as any).navigate('TableRowEditor', {
-                  fieldname,
-                  tableDoctype: (options as string) || '',
-                  title: label,
-                  index: rowIndex,
-                  initialRow:
-                    Array.isArray(value) && value[rowIndex]
-                      ? value[rowIndex]
-                      : null,
-                  schema: tableSchema || undefined,
-                })
-              }
-              onDeleteRow={rowIndex => {
-                const current = Array.isArray(value)
-                  ? [...(value as any[])]
-                  : [];
-                if (rowIndex >= 0 && rowIndex < current.length) {
-                  current.splice(rowIndex, 1);
-                  handleChange(
-                    fieldname,
-                    current as unknown as string | boolean
-                  );
-                }
-              }}
-            />
-          </View>
-        );
-      }
-
-      default:
-        // Default to regular text input
-        return (
-          <View key={fieldname} className="mb-4">
-            <Text
-              className="font-sans text-sm font-medium leading-5 tracking-normal"
-              style={{ color: theme.text }}
-            >
-              {label}
-            </Text>
-            <TextInput
-              className="h-[40px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
-              style={{
-                borderColor: theme.border,
-                backgroundColor: theme.background,
-                color: theme.text,
-              }}
-              placeholder={label}
-              placeholderTextColor={theme.subtext}
-              value={String(value || '')}
-              onChangeText={text => handleChange(fieldname, text)}
-              editable={true}
-            />
-          </View>
-        );
+    // SectionBreak and Heading do not need label above
+    if (fieldtype === 'Section Break') {
+      return <SectionBreak key={fieldname} label={label} />;
     }
+    if (fieldtype === 'Heading') {
+      return <HeadingText key={fieldname} label={label} />;
+    }
+
+    return (
+      <View key={fieldname} className="mb-4" style={{ zIndex: 1000 - index }}>
+        {/* Field label and required asterisk */}
+        {fieldtype !== 'Check' && (
+          <Text
+            className="font-sans text-sm font-medium leading-5 tracking-normal"
+            style={{ color: theme.text }}
+          >
+            {label}
+            {isRequired && <Text style={{ color: 'red' }}> *</Text>}
+          </Text>
+        )}
+
+        {(() => {
+          switch (fieldtype) {
+            case 'Select':
+              if (options) {
+                const optionsList = options
+                  .split('\n')
+                  .filter((opt: string) => opt.trim());
+                return (
+                  <SelectDropdown
+                    options={optionsList}
+                    value={value}
+                    onValueChange={val => handleChange(fieldname, val)}
+                    placeholder={t('formDetail.selectPlaceholder', { label })}
+                    isOpen={isOpen}
+                    onToggle={() => toggleDropdown(fieldname)}
+                    containerZIndex={1000 - index}
+                    formData={formData}
+                  />
+                );
+              }
+              return null;
+            case 'Link':
+              if (options) {
+                return (
+                  <LinkDropdown
+                    doctype={options as string}
+                    value={value}
+                    onValueChange={val => handleChange(fieldname, val)}
+                    placeholder={t('formDetail.selectPlaceholder', { label })}
+                    isOpen={isOpen}
+                    onToggle={() => toggleDropdown(fieldname)}
+                    containerZIndex={1000 - index}
+                  />
+                );
+              }
+              return null;
+            case 'Date':
+              return (
+                <DatePicker
+                  value={value}
+                  onValueChange={val => handleChange(fieldname, val)}
+                  placeholder={t('formDetail.selectPlaceholder', { label })}
+                />
+              );
+            case 'Table': {
+              const tableSchema = tableSchemas[fieldname];
+              return (
+                <TableField
+                  value={value}
+                  onAddRow={undefined}
+                  onEditRow={rowIndex =>
+                    (navigation as any).navigate('TableRowEditor', {
+                      fieldname,
+                      tableDoctype: (options as string) || '',
+                      title: label,
+                      index: rowIndex,
+                      initialRow:
+                        Array.isArray(value) && value[rowIndex]
+                          ? value[rowIndex]
+                          : null,
+                      schema: tableSchema || undefined,
+                    })
+                  }
+                  onDeleteRow={rowIndex => {
+                    const current = Array.isArray(value)
+                      ? [...(value as any[])]
+                      : [];
+                    if (rowIndex >= 0 && rowIndex < current.length) {
+                      current.splice(rowIndex, 1);
+                      handleChange(
+                        fieldname,
+                        current as unknown as string | boolean
+                      );
+                    }
+                  }}
+                />
+              );
+            }
+            case 'Currency':
+              return (
+                <CurrencyInput
+                  placeholder={t('formDetail.enterPlaceholder', { label })}
+                  value={value || ''}
+                  onChangeText={text => handleChange(fieldname, text)}
+                />
+              );
+            case 'Phone':
+              return (
+                <PhoneInput
+                  placeholder={t('formDetail.enterPlaceholder', { label })}
+                  value={value || ''}
+                  onChangeText={text => handleChange(fieldname, text)}
+                />
+              );
+            case 'Check':
+              return (
+                <CheckboxInput
+                  value={value}
+                  onValueChange={val => handleChange(fieldname, val)}
+                  label={label}
+                />
+              );
+            case 'Text':
+              return (
+                <TextInput
+                  className="min-h-[80px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
+                  style={{
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                    color: theme.text,
+                  }}
+                  placeholder={label}
+                  placeholderTextColor={theme.subtext}
+                  value={String(value || '')}
+                  onChangeText={text => handleChange(fieldname, text)}
+                  multiline={true}
+                  textAlignVertical="top"
+                  editable={true}
+                />
+              );
+            default:
+              return (
+                <TextInput
+                  className="h-[40px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
+                  style={{
+                    borderColor: theme.border,
+                    backgroundColor: theme.background,
+                    color: theme.text,
+                  }}
+                  placeholder={label}
+                  placeholderTextColor={theme.subtext}
+                  value={String(value || '')}
+                  onChangeText={text => handleChange(fieldname, text)}
+                  editable={true}
+                />
+              );
+          }
+        })()}
+      </View>
+    );
   };
 
   return (
