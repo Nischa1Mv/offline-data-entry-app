@@ -82,49 +82,44 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
     emitPhoneValue(numeric, phoneNumber);
   };
 
+  // Combine flag, country code, and phone number in a single input box UI
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <RNTextInput
-        style={{
-          width: 60,
-          height: 40,
-          borderWidth: 1,
-          borderRadius: 6,
-          paddingHorizontal: 8,
-          marginRight: 8,
-          borderColor: theme.border,
-          backgroundColor: theme.background,
-          color: theme.text,
-        }}
-        placeholder="+91"
-        placeholderTextColor={theme.subtext}
-        keyboardType="phone-pad"
-        value={countryCode ? `+${countryCode}` : ''}
-        onChangeText={text => {
-          // Remove + if user types it
-          handleCountryCodeChange(text.replace('+', ''));
-        }}
-        maxLength={5}
-      />
-      <RNTextInput
-        className="w-full rounded-md border px-3 py-2"
         style={{
           flex: 1,
           height: 40,
           borderWidth: 1,
           borderRadius: 6,
           paddingHorizontal: 12,
-          paddingVertical: 10,
           borderColor: theme.border,
           backgroundColor: theme.background,
           color: theme.text,
+          fontSize: 16,
         }}
-        placeholder="1234567890"
+        placeholder="🇮🇳 +91 1234567890"
         placeholderTextColor={theme.subtext}
         keyboardType="phone-pad"
-        value={phoneNumber}
-        onChangeText={handlePhoneChange}
-        maxLength={10}
+        value={`🇮🇳 +${countryCode} ${phoneNumber}`}
+        onChangeText={text => {
+          // Parse input: expect format like '🇮🇳 +91 1234567890'
+          // Remove flag and split
+          let cleaned = text.replace(/[^0-9+]/g, ' ');
+          let parts = cleaned.trim().split(' ');
+          let cc = '91';
+          let pn = '';
+          if (parts.length >= 2) {
+            // Find country code
+            cc = parts[0].replace('+', '') || '91';
+            pn = parts.slice(1).join('').replace(/[^0-9]/g, '').slice(0, 10);
+          } else if (parts.length === 1) {
+            pn = parts[0].replace(/[^0-9]/g, '').slice(0, 10);
+          }
+          setCountryCode(cc);
+          setPhoneNumber(pn);
+          emitPhoneValue(cc, pn);
+        }}
+        maxLength={18}
         {...props}
       />
     </View>
