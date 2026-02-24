@@ -55,13 +55,11 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
   }, [value]);
 
 
-  // Helper to emit value only if both country code and phone number are present and valid
+  // Always emit in +{countrycode}-{phonenumber} format, even if incomplete
   const emitPhoneValue = (cc: string, pn: string) => {
-    if (cc && pn && pn.length === 10) {
-      onChangeText && onChangeText(`+${cc}-${pn}`);
-    } else {
-      onChangeText && onChangeText('');
-    }
+    // Always emit in +{countrycode}-{phonenumber} format
+    const formatted = `+${cc || ''}-${pn || ''}`;
+    onChangeText && onChangeText(formatted);
   };
 
   const handlePhoneChange = (text: string) => {
@@ -82,9 +80,45 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
     emitPhoneValue(numeric, phoneNumber);
   };
 
-  // Combine flag, country code, and phone number in a single input box UI
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: theme.border, borderRadius: 6, backgroundColor: theme.background, marginRight: 8, height: 40, paddingHorizontal: 8 }}>
+        <RNTextInput
+          style={{
+            width: 28,
+            color: theme.text,
+            fontSize: 18,
+            padding: 0,
+            marginRight: 2,
+            backgroundColor: 'transparent',
+            textAlign: 'center',
+          }}
+          value={countryCode === '91' ? '🇮🇳' : ''}
+          editable={false}
+          pointerEvents="none"
+        />
+        <RNTextInput
+          style={{
+            width: 40,
+            color: theme.text,
+            fontSize: 16,
+            padding: 0,
+            backgroundColor: 'transparent',
+            textAlign: 'left',
+          }}
+          placeholder="+91"
+          placeholderTextColor={theme.subtext}
+          keyboardType="number-pad"
+          value={countryCode ? `+${countryCode}` : ''}
+          onChangeText={text => {
+            let numeric = text.replace(/[^0-9]/g, '');
+            if (numeric.length > 4) numeric = numeric.slice(0, 4);
+            setCountryCode(numeric);
+            emitPhoneValue(numeric, phoneNumber);
+          }}
+          maxLength={5}
+        />
+      </View>
       <RNTextInput
         style={{
           flex: 1,
@@ -97,29 +131,12 @@ const PhoneInput: React.FC<PhoneInputProps> = ({
           color: theme.text,
           fontSize: 16,
         }}
-        placeholder="🇮🇳 +91 1234567890"
+        placeholder="Phone number"
         placeholderTextColor={theme.subtext}
         keyboardType="phone-pad"
-        value={`🇮🇳 +${countryCode} ${phoneNumber}`}
-        onChangeText={text => {
-          // Parse input: expect format like '🇮🇳 +91 1234567890'
-          // Remove flag and split
-          let cleaned = text.replace(/[^0-9+]/g, ' ');
-          let parts = cleaned.trim().split(' ');
-          let cc = '91';
-          let pn = '';
-          if (parts.length >= 2) {
-            // Find country code
-            cc = parts[0].replace('+', '') || '91';
-            pn = parts.slice(1).join('').replace(/[^0-9]/g, '').slice(0, 10);
-          } else if (parts.length === 1) {
-            pn = parts[0].replace(/[^0-9]/g, '').slice(0, 10);
-          }
-          setCountryCode(cc);
-          setPhoneNumber(pn);
-          emitPhoneValue(cc, pn);
-        }}
-        maxLength={18}
+        value={phoneNumber}
+        onChangeText={handlePhoneChange}
+        maxLength={10}
         {...props}
       />
     </View>
