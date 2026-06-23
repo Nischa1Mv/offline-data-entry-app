@@ -11,7 +11,10 @@ import { Mail } from 'lucide-react-native';
 import LanguageControl from '../components/LanguageControl';
 import { useTheme } from '../../context/ThemeContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { EXPO_PUBLIC_BACKEND_URL } from '@env';
 import {
+  clearAuthTokens,
   refreshAuthTokens,
   saveAuthTokens,
 } from '../../services/auth/tokenStorage';
@@ -59,6 +62,27 @@ const Login: React.FC<Props> = ({ navigation }) => {
         await refreshAuthTokens();
       } catch (refreshError) {
         console.error('Failed to refresh tokens after sign-in:', refreshError);
+      }
+
+      // Verify the user has an ERP account before allowing entry
+      try {
+        const statusResp = await axios.get(
+          `${EXPO_PUBLIC_BACKEND_URL}/user/erp-status`,
+          { headers: { Authorization: `Bearer ${data.idToken}` } }
+        );
+        if (!statusResp.data.erp_user) {
+          await clearAuthTokens();
+          await GoogleSignin.signOut();
+          await AsyncStorage.removeItem('userInfo');
+          Alert.alert(
+            'Account not found',
+            `${data.user?.email} is not registered in the system. Please contact your administrator.`
+          );
+          return;
+        }
+      } catch (erpCheckError) {
+        console.error('ERP status check failed:', erpCheckError);
+        // Allow login if the check itself fails (network issue etc.)
       }
 
       navigation.navigate('MainApp');

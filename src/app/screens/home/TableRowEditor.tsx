@@ -108,6 +108,7 @@ const TableRowEditor: React.FC = () => {
           hidden: 0 as any,
           print_hide: 0 as any,
           report_hide: 0 as any,
+          reqd: 0,
         }));
         setFields(derived);
       } else {
