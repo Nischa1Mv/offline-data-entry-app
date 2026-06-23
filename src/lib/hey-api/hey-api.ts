@@ -1,5 +1,6 @@
 import { EXPO_PUBLIC_BACKEND_URL } from '@env';
 import { getIdToken } from '../../services/auth/tokenStorage';
+import { navigateToLogin } from '../../app/navigation/navigationRef';
 import type { CreateClientConfig } from './client/client.gen';
 
 export const createClientConfig: CreateClientConfig = config => {
@@ -93,8 +94,11 @@ export const createClientConfig: CreateClientConfig = config => {
             '[API Client] Failed to refresh ID token after 401 response:',
             refreshError
           );
-          // Return the original 401 response so the caller can handle it
         }
+      }
+
+      if (response.status === 401 || response.status === 412) {
+        navigateToLogin();
       }
 
       return response;

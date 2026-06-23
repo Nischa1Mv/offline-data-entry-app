@@ -14,6 +14,7 @@ import { useNetwork } from '../../context/NetworkProvider';
 import { useTheme } from '../../context/ThemeContext';
 import { EXPO_PUBLIC_BACKEND_URL } from '@env';
 import { getIdToken } from '../../services/auth/tokenStorage';
+import { navigateToLogin } from '../navigation/navigationRef';
 
 type LinkDropdownProps = {
   doctype: string;
@@ -98,7 +99,6 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
     return allOptions.filter(option => option.toLowerCase().includes(lower));
   }, [allOptions, searchTerm]);
 
-  const displayOptions = useMemo(() => filteredOptions.slice(0, 20), [filteredOptions]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -202,8 +202,7 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
             shadowOpacity: 0.15,
             shadowRadius: 12,
             elevation: 8,
-            maxHeight: 250,
-            overflow: 'hidden',
+            maxHeight: 300,
           }}
         >
           {waitingForParent ? (
@@ -239,29 +238,32 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
                   placeholderTextColor={theme.subtext}
                 />
               </View>
-              <ScrollView nestedScrollEnabled={true} style={{ maxHeight: 250 }}>
-                {displayOptions.length > 0 ? (
-                  displayOptions.map((option: string, optIndex: number) => {
-                    const trimmedOption = (option || '').toString().trim();
-                    const isSelected = value === trimmedOption;
-                    return (
-                      <TouchableOpacity
-                        key={`${trimmedOption}-${optIndex}`}
-                        className={`px-4 py-3.5 ${optIndex < displayOptions.length - 1 ? 'border-b' : ''}`}
-                        style={{
-                          backgroundColor: isSelected ? theme.dropdownSelectedBg : theme.dropdownBg,
-                          borderBottomColor: optIndex < displayOptions.length - 1 ? theme.border : undefined,
-                          borderBottomWidth: optIndex < displayOptions.length - 1 ? 0.5 : 0,
-                        }}
-                        onPress={() => onValueChange(trimmedOption)}
-                      >
-                        <Text style={{ color: theme.text, fontWeight: isSelected ? '600' : 'normal', fontSize: 15 }}>
-                          {trimmedOption}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })
-                ) : (
+              <ScrollView
+                style={{ height: 200 }}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {filteredOptions.length > 0 ? filteredOptions.map((option, optIndex) => {
+                  const trimmed = option.trim();
+                  const isSelected = value === trimmed;
+                  return (
+                    <TouchableOpacity
+                      key={`${trimmed}-${optIndex}`}
+                      className="px-4 py-3.5"
+                      style={{
+                        backgroundColor: isSelected ? theme.dropdownSelectedBg : theme.dropdownBg,
+                        borderBottomColor: theme.border,
+                        borderBottomWidth: 0.5,
+                      }}
+                      onPress={() => onValueChange(trimmed)}
+                    >
+                      <Text style={{ color: theme.text, fontWeight: isSelected ? '600' : 'normal', fontSize: 15 }}>
+                        {trimmed}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }) : (
                   <View className="px-4 py-6">
                     <Text className="text-center text-sm" style={{ color: theme.subtext }}>
                       No options available
@@ -302,6 +304,11 @@ async function fetchFromApi(
   if (resp.status === 401) {
     token = await getIdToken({ forceRefresh: true });
     resp = await doRequest(token);
+  }
+
+  if (resp.status === 401 || resp.status === 412) {
+    navigateToLogin();
+    throw new Error(`Session expired (${resp.status})`);
   }
 
   if (resp.status !== 200) {

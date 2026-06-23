@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StatusBar } from 'react-native';
@@ -149,7 +150,7 @@ function AppContent(): React.JSX.Element {
           backgroundColor={theme.background}
         />
         <NetworkProvider>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <Stack.Navigator
               initialRouteName={initialRoute}
               screenOptions={{ headerShown: false }}
