@@ -11,6 +11,7 @@
     "lint": "expo lint"
   },
   "dependencies": {
+    "@expo/ngrok": "^4.0.1",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-native-community/datetimepicker": "8.4.4",
@@ -23,6 +24,7 @@
     "axios": "^1.9.0",
     "crypto-js": "^4.2.0",
     "eas-cli": "^16.28.0",
+    "eslint-config-expo": "~10.0.0",
     "expo": "~54.0.25",
     "expo-build-properties": "~1.0.9",
     "expo-constants": "~18.0.10",
@@ -64,6 +66,7 @@
   "devDependencies": {
     "@types/crypto-js": "^4.2.2",
     "@types/react": "~19.1.0",
+    "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"
