@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ArrowLeft } from 'lucide-react-native';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -26,12 +26,24 @@ import { useNetwork } from '../../../context/NetworkProvider';
 import { useTheme } from '../../../context/ThemeContext';
 import generateSchemaHash from '../../../helper/hashFunction';
 import { RawField } from '../../../types';
+import {
+  formatFloatToFixed,
+  validateFloatInput,
+  validateIntegerInput,
+} from '../../../utils/fieldValidation';
 import DatePicker from '../../components/DatePicker';
 import LanguageControl from '../../components/LanguageControl';
 import LinkDropdown from '../../components/LinkDropdown';
 import SelectDropdown from '../../components/SelectDropdown';
 import TableField from '../../components/TableField';
+import CheckboxInput from '../../components/fields/CheckboxInput';
+import CurrencyInput from '../../components/fields/CurrencyInput';
+import HeadingText from '../../components/fields/HeadingText';
+import PhoneInput from '../../components/fields/PhoneInput';
+import SectionBreak from '../../components/fields/SectionBreak';
 import { enqueue } from '../../pendingQueue';
+import { processQueue } from '../../../services/submissionService';
+import { toast } from '../../../lib/toast';
 
 type FormDetailRouteProp = RouteProp<HomeStackParamList, 'FormDetail'>;
 type FormDetailNavigationProp = NativeStackNavigationProp<
@@ -42,6 +54,18 @@ type FormDetailNavigationProp = NativeStackNavigationProp<
 type Props = {
   navigation: FormDetailNavigationProp;
 };
+
+function parseLinkFilters(
+  link_filters: string
+): { filterField: string; parentFormField: string } | null {
+  try {
+    const [[, field, , value]] = JSON.parse(link_filters);
+    if (typeof value === 'string' && value.startsWith('eval:doc.')) {
+      return { filterField: field, parentFormField: value.replace('eval:doc.', '') };
+    }
+  } catch {}
+  return null;
+}
 
 const FormDetail: React.FC<Props> = ({ navigation }) => {
   //this is the network status , make it true/false to simulate offline/online
@@ -59,19 +83,120 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
   const { theme } = useTheme();
   const isSubmittedRef = useRef(false);
 
+  // For each Link field: explicit link_filters from ERP, or auto-inferred from
+  // same-doctype chains (e.g. multiple Territory fields → filter by parent_territory).
+  const { linkDependencyMap, autoLinkDeps } = useMemo(() => {
+    // Group Link fields by target doctype, preserving form order
+    const byDoctype: Record<string, string[]> = {};
+    for (const field of fields) {
+      if (field.fieldtype === 'Link' && field.options) {
+        (byDoctype[field.options.trim()] ??= []).push(field.fieldname);
+      }
+    }
+
+    const auto: Record<string, { filterField: string; parentFormField: string }> = {};
+    for (const [doctype, group] of Object.entries(byDoctype)) {
+      if (group.length < 1) continue;
+      const filterField = `parent_${doctype.toLowerCase().replace(/ /g, '_')}`;
+
+      // Wire group[1..n] → previous in chain
+      for (let i = 1; i < group.length; i++) {
+        auto[group[i]] = { filterField, parentFormField: group[i - 1] };
+      }
+
+      // Wire group[0] → nearest preceding Select/Link field (e.g. state Select → district)
+      const firstIdx = fields.findIndex(f => f.fieldname === group[0]);
+      for (let k = firstIdx - 1; k >= 0; k--) {
+        const pre = fields[k];
+        if (pre.fieldtype === 'Section Break' || pre.fieldtype === 'Column Break') continue;
+        if (pre.fieldtype === 'Select' || pre.fieldtype === 'Link') {
+          auto[group[0]] = { filterField, parentFormField: pre.fieldname };
+        }
+        break;
+      }
+    }
+
+    const map: Record<string, string[]> = {};
+    for (const field of fields) {
+      if (field.fieldtype !== 'Link') continue;
+      const dep = field.link_filters
+        ? parseLinkFilters(field.link_filters)
+        : (auto[field.fieldname] ?? null);
+      if (dep) {
+        (map[dep.parentFormField] ??= []).push(field.fieldname);
+      }
+    }
+    return { linkDependencyMap: map, autoLinkDeps: auto };
+  }, [fields]);
+
   // Helper function to check if a field should be enabled based on depends_on
   const isFieldEnabled = useCallback((field: RawField) => {
     if (!field.depends_on) return true;
 
-    if (field.depends_on.startsWith('eval:doc.')) {
-      const regex = /^eval:doc\.([a-zA-Z0-9_]+)\s*==\s*["'](.+)["']$/;
-      const match = field.depends_on.match(regex);
-      if (match) {
-        const [_, fieldName, expectedValue] = match;
-        return formData[fieldName] === expectedValue;
+    if (field.depends_on.startsWith('eval:')) {
+      try {
+        // Remove 'eval:' prefix
+        let expression = field.depends_on.substring(5).trim();
+
+        // Replace 'doc.' with actual formData values
+        // First, find all unique field references
+        const fieldMatches = expression.matchAll(/doc\.([a-zA-Z0-9_]+)/g);
+        const fieldReplacements: Record<string, string> = {};
+
+        for (const match of fieldMatches) {
+          const fieldName = match[1];
+          const fieldValue = formData[fieldName];
+          // Store the value to replace later
+          if (!fieldReplacements[fieldName]) {
+            fieldReplacements[fieldName] = fieldValue || '';
+          }
+        }
+
+        // Now evaluate by splitting on OR conditions
+        const orConditions = expression.split('||').map(cond => cond.trim());
+
+        // Check if any OR condition is true
+        const result = orConditions.some(condition => {
+          // Split by AND operator (&&)
+          const andConditions = condition.split('&&').map(cond => cond.trim());
+
+          // All AND conditions must be true
+          return andConditions.every(andCond => {
+            // Match pattern: doc.fieldname == "value"
+            const regex = /doc\.([a-zA-Z0-9_]+)\s*==\s*["']([^"']*)["']/;
+            const match = andCond.match(regex);
+
+            if (match) {
+              const [_, fieldName, expectedValue] = match;
+              const actualValue = formData[fieldName];
+              const matches = actualValue === expectedValue;
+
+              // Debug logging
+              console.log('Depends_on check:', {
+                fieldLabel: field.label,
+                condition: andCond,
+                fieldName,
+                expectedValue,
+                actualValue,
+                matches
+              });
+
+              return matches;
+            }
+
+            console.log('Depends_on regex no match:', andCond);
+            return false;
+          });
+        });
+
+        console.log('Final result for', field.label, ':', result);
+        return result;
+      } catch (error) {
+        console.error('Error evaluating depends_on:', field.depends_on, error);
+        return false;
       }
-      return false;
     }
+
     return true;
   }, [formData]);
 
@@ -114,6 +239,12 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
           'Link',
           'Date',
           'Table',
+          'Check',
+          'Phone',
+          'Currency',
+          'Heading',
+          'Section Break',
+
         ].includes(field.fieldtype);
       });
 
@@ -144,14 +275,21 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    // Only check fields that are enabled (not disabled by depends_on)
+    // Only check fields that are enabled (not disabled by depends_on) AND required
     const missingFields = fields.filter(field => {
+      // Skip display-only fields (Section Break, Heading)
+      const isDisplayOnly = field.fieldtype === 'Section Break' || field.fieldtype === 'Heading';
+      if (isDisplayOnly) {
+        return false;
+      }
+
       const isEnabled = isFieldEnabled(field);
+      const isRequired = field.reqd === 1;
       const isEmpty = !formData[field.fieldname] ||
         formData[field.fieldname].toString().trim() === '';
-      
-      // Only report as missing if the field is enabled AND empty
-      return isEnabled && isEmpty;
+
+      // Only report as missing if the field is enabled AND required AND empty
+      return isEnabled && isRequired && isEmpty;
     });
 
     if (missingFields.length > 0) {
@@ -165,10 +303,6 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       return;
     }
 
-    if (Object.keys(formData).length === 0) {
-      Alert.alert(t('common.error'), t('formDetail.noData'));
-      return;
-    }
     setConfirmModalVisible(true);
   };
 
@@ -190,9 +324,8 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       data: formData,
       schemaHash,
       status: 'pending' as 'pending' | 'submitted' | 'failed',
-      is_submittable: doctype.data?.is_submittable ?? 0,
+      is_submittable: doctype.data.is_submittable
     };
-
     setLoading(true);
     setConfirmModalVisible(false);
     try {
@@ -200,6 +333,11 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       isSubmittedRef.current = true;
       await AsyncStorage.removeItem('tempFormData');
       setFormData({});
+      if (isConnected) {
+        processQueue().catch(e => console.warn('[FormDetail] Auto-submit failed:', e));
+      } else {
+        toast.show('Saved — will send when back online', 'pending');
+      }
       setTimeout(() => {
         navigation.goBack();
       }, 100);
@@ -298,16 +436,18 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
   }, [formData]);
 
   const handleChange = async (fieldname: string, value: any) => {
-    const updated = { ...formData, [fieldname]: value };
+    let updated = { ...formData, [fieldname]: value };
+    const clearDependents = (name: string) => {
+      for (const child of linkDependencyMap[name] ?? []) {
+        updated[child] = '';
+        clearDependents(child);
+      }
+    };
+    clearDependents(fieldname);
     setFormData(updated);
-    //store the temp data on every change
     await AsyncStorage.setItem('tempFormData', JSON.stringify(updated));
-    // Close dropdown after selection
     if (dropdownStates[fieldname]) {
-      setDropdownStates(prev => ({
-        ...prev,
-        [fieldname]: false,
-      }));
+      setDropdownStates(prev => ({ ...prev, [fieldname]: false }));
     }
   };
 
@@ -386,6 +526,10 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
             </Text>
             <View className="flex-col">
               {fields.map((field, index) => {
+                // Check if field should be visible based on depends_on
+                const isEnabled = isFieldEnabled(field);
+                if (!isEnabled) return null;
+
                 const isSelectField =
                   field.fieldtype === 'Select' && field.options;
                 const optionsList =
@@ -395,12 +539,23 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                       .filter((opt: string) => opt.trim())
                     : [];
                 const isLinkField = field.fieldtype === 'Link' && field.options;
+                const linkDep = isLinkField
+                  ? (field.link_filters
+                    ? parseLinkFilters(field.link_filters)
+                    : (autoLinkDeps[field.fieldname] ?? null))
+                  : null;
                 const isDateField = field.fieldtype === 'Date';
                 const isTableField = field.fieldtype === 'Table';
                 const isOpen = dropdownStates[field.fieldname] || false;
                 const selectedValue = formData[field.fieldname];
                 const isNumericField =
                   field.fieldtype === 'Int' || field.fieldtype === 'Float';
+                const isCurrencyField = field.fieldtype === 'Currency';
+                const isPhoneField = field.fieldtype === 'Phone';
+                const isCheckField = field.fieldtype === 'Check';
+                const isHeading = field.fieldtype === 'Heading';
+                const isSectionBreak = field.fieldtype === 'Section Break';
+                const isRequired = field.reqd === 1;
 
                 return (
                   <View
@@ -408,23 +563,29 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                     className="mb-4"
                     style={{ zIndex: 1000 - index }}
                   >
-                    <Text
-                      className="font-sans text-sm font-medium leading-5 tracking-normal"
-                      style={{ color: theme.text }}
-                    >
-                      {field.label || field.fieldname}
-                    </Text>
-                    {isSelectField ? (
+                    {!isHeading && !isSectionBreak && !isCheckField && (
+                      <Text
+                        className="font-sans text-sm font-medium leading-5 tracking-normal"
+                        style={{ color: theme.text }}
+                      >
+                        {field.label}
+                        {isRequired && <Text style={{ color: 'red' }}> *</Text>}
+                      </Text>
+                    )}
+                    {isSectionBreak ? (
+                      <SectionBreak label={field.label} />
+                    ) : isHeading ? (
+                      <HeadingText label={field.label} />
+                    ) : isSelectField ? (
                       <SelectDropdown
                         formData={formData}
-                        dependsOn={field.depends_on || undefined}
                         options={optionsList}
                         value={selectedValue}
                         onValueChange={value =>
                           handleChange(field.fieldname, value)
                         }
                         placeholder={t('formDetail.selectPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         isOpen={isOpen}
                         onToggle={() => toggleDropdown(field.fieldname)}
@@ -438,11 +599,13 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           handleChange(field.fieldname, value)
                         }
                         placeholder={t('formDetail.selectPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         isOpen={isOpen}
                         onToggle={() => toggleDropdown(field.fieldname)}
                         containerZIndex={1000 - index}
+                        filterField={linkDep?.filterField}
+                        filterValue={linkDep ? (formData[linkDep.parentFormField] ?? '') : undefined}
                       />
                     ) : isDateField ? (
                       <DatePicker
@@ -451,7 +614,7 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           handleChange(field.fieldname, value)
                         }
                         placeholder={t('formDetail.selectPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                       />
                     ) : isTableField ? (
@@ -461,14 +624,14 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           (navigation as any).navigate('TableRowEditor', {
                             fieldname: field.fieldname,
                             tableDoctype: (field.options as string) || '',
-                            title: field.label || field.fieldname,
+                            title: field.label,
                           })
                         }
                         onEditRow={rowIndex =>
                           (navigation as any).navigate('TableRowEditor', {
                             fieldname: field.fieldname,
                             tableDoctype: (field.options as string) || '',
-                            title: field.label || field.fieldname,
+                            title: field.label,
                             index: rowIndex,
                             initialRow:
                               Array.isArray(selectedValue) &&
@@ -495,6 +658,34 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           }
                         }}
                       />
+                    ) : isCurrencyField ? (
+                      <CurrencyInput
+                        placeholder={t('formDetail.enterPlaceholder', {
+                          label: field.label,
+                        })}
+                        value={formData[field.fieldname] || ''}
+                        onChangeText={text =>
+                          handleChange(field.fieldname, text)
+                        }
+                      />
+                    ) : isPhoneField ? (
+                      <PhoneInput
+                        placeholder={t('formDetail.enterPlaceholder', {
+                          label: field.label,
+                        })}
+                        value={formData[field.fieldname] || ''}
+                        onChangeText={(text: string) =>
+                          handleChange(field.fieldname, text)
+                        }
+                      />
+                    ) : isCheckField ? (
+                      <CheckboxInput
+                        value={formData[field.fieldname]}
+                        onValueChange={value =>
+                          handleChange(field.fieldname, value)
+                        }
+                        label={field.label || t('formDetail.checkboxLabel')}
+                      />
                     ) : (
                       <TextInput
                         className="h-[40px] w-full rotate-0 rounded-md border pb-2.5 pl-3 pr-3 pt-2.5 opacity-100"
@@ -504,14 +695,28 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                           color: theme.text,
                         }}
                         placeholder={t('formDetail.enterPlaceholder', {
-                          label: field.label || field.fieldname,
+                          label: field.label,
                         })}
                         placeholderTextColor={theme.subtext}
                         value={formData[field.fieldname] || ''}
                         keyboardType={isNumericField ? 'numeric' : 'default'}
-                        onChangeText={text =>
-                          handleChange(field.fieldname, text)
-                        }
+                        onChangeText={text => {
+                          if (field.fieldtype === 'Int') {
+                            handleChange(field.fieldname, validateIntegerInput(text));
+                          } else if (field.fieldtype === 'Float') {
+                            handleChange(field.fieldname, validateFloatInput(text));
+                          } else {
+                            handleChange(field.fieldname, text);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (field.fieldtype === 'Float' && formData[field.fieldname]) {
+                            handleChange(
+                              field.fieldname,
+                              formatFloatToFixed(formData[field.fieldname])
+                            );
+                          }
+                        }}
                       />
                     )}
                   </View>

@@ -10,27 +10,21 @@ export const initQueue = async () => {
   }
 };
 
-export const getQueue = async () => {
+export const getQueue = async (): Promise<SubmissionItem[]> => {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (e) {
-    console.error('Error parsing queue', e);
+    console.error('Error reading queue', e);
     return [];
   }
 };
 
-export const enqueue = async (submission: SubmissionItem) => {
+export const enqueue = async (submission: SubmissionItem): Promise<SubmissionItem> => {
   const queue = await getQueue();
-  const updatedQueue = [...queue, submission];
-  try {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedQueue));
-    console.log('Enqueued submission:', submission);
-  } catch (e) {
-    console.error('Failed to save submission:', e);
-    throw e;
-  }
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...queue, submission]));
+  console.log('Enqueued submission:', submission.id);
   return submission;
 };
 
@@ -40,6 +34,8 @@ export const clearQueue = async () => {
 
 export const removeFromQueue = async (id: string) => {
   const queue = await getQueue();
-  const updated = queue.filter((item: any) => item.id !== id);
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  await AsyncStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(queue.filter(item => item.id !== id))
+  );
 };

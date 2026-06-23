@@ -1,27 +1,53 @@
+import axios from 'axios';
+import { ChevronDown } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
+  ScrollView,
+  Text,
   TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { ChevronDown } from 'lucide-react-native';
-import { useTheme } from '../../context/ThemeContext';
-import { useNetwork } from '../../context/NetworkProvider';
-import { getLinkOptions } from '../../lib/hey-api/client/sdk.gen';
 import { getLinkOptionsFromLocal, saveLinkOptionsToLocal } from '../../api';
+import { useNetwork } from '../../context/NetworkProvider';
+import { useTheme } from '../../context/ThemeContext';
+import { EXPO_PUBLIC_BACKEND_URL } from '@env';
+import { getIdToken } from '../../services/auth/tokenStorage';
+import { navigateToLogin } from '../navigation/navigationRef';
 
 type LinkDropdownProps = {
-  doctype: string; // linked doctype to fetch options for
+  doctype: string;
   value?: string;
   onValueChange: (value: string) => void;
   placeholder: string;
   isOpen: boolean;
   onToggle: () => void;
   containerZIndex?: number;
+  filterField?: string;
+  filterValue?: string;
 };
+
+function normalizeOptions(raw: unknown): string[] {
+  let list: unknown[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (raw && typeof raw === 'object' && Array.isArray((raw as any).data)) {
+    list = (raw as any).data;
+  }
+  return list
+    .map(item => {
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object') {
+        const obj = item as Record<string, unknown>;
+        const candidate = obj.label ?? obj.value ?? obj.name ?? obj.title ?? obj.id ?? obj.key;
+        if (typeof candidate === 'string') return candidate;
+      }
+      return undefined;
+    })
+    .filter((opt): opt is string => typeof opt === 'string' && opt.trim().length > 0)
+    .map(opt => opt.trim());
+}
 
 const LinkDropdown: React.FC<LinkDropdownProps> = ({
   doctype,
@@ -31,6 +57,8 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
   isOpen,
   onToggle,
   containerZIndex,
+  filterField,
+  filterValue,
 }) => {
   const { theme } = useTheme();
   const { isConnected } = useNetwork();
@@ -40,141 +68,80 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
   const [searchTerm, setSearchTerm] = useState<string>('');
   const hasLoadedRef = useRef(false);
 
-  const containerStyle = {
-    position: 'relative' as const,
-    zIndex: containerZIndex,
-  };
-
-  const dropdownStyle = {
-    position: 'absolute' as const,
-    top: 45,
-    left: 0,
-    right: 0,
-    zIndex: 2000,
-    backgroundColor: theme.dropdownBg,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    borderRadius: 8,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 20,
-  };
-
-  const filteredOptions = useMemo(() => {
-    if (!searchTerm.trim()) {
-      return allOptions;
-    }
-    const lower = searchTerm.trim().toLowerCase();
-    return allOptions.filter(option => option.toLowerCase().includes(lower));
-  }, [allOptions, searchTerm]);
-
-  const displayOptions = useMemo(
-    () => filteredOptions.slice(0, 20),
-    [filteredOptions]
-  );
-
-  const dropdownMaxHeight = Math.min(
-    Math.max(displayOptions.length, 4) * 48 + 56,
-    480
-  );
-
-  const scrollViewStyle = {
-    maxHeight: dropdownMaxHeight - 56,
-  };
-
   const normalizedDoctype = useMemo(() => (doctype || '').trim(), [doctype]);
 
+
+  const cacheKey = useMemo(
+    () =>
+      filterField && filterValue
+        ? `${normalizedDoctype}:${filterField}:${filterValue}`
+        : normalizedDoctype,
+    [normalizedDoctype, filterField, filterValue]
+  );
+
+  // Reset when doctype changes
   useEffect(() => {
     hasLoadedRef.current = false;
     setAllOptions([]);
     setSearchTerm('');
   }, [normalizedDoctype]);
 
+  // Reset when parent filter value changes
   useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-    if (!normalizedDoctype) {
-      return;
-    }
+    hasLoadedRef.current = false;
+    setAllOptions([]);
+    setSearchTerm('');
+  }, [filterValue]);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchTerm.trim()) return allOptions;
+    const lower = searchTerm.trim().toLowerCase();
+    return allOptions.filter(option => option.toLowerCase().includes(lower));
+  }, [allOptions, searchTerm]);
+
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!normalizedDoctype) return;
+
+    // Guard: parent field not yet selected
+    if (filterField && !filterValue) return;
+
     if (hasLoadedRef.current && allOptions.length > 0) {
       setSearchTerm('');
       return;
     }
+
     let cancelled = false;
+
     const fetchOptions = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // First, try to get from local storage (works offline)
-        const cachedOptions = await getLinkOptionsFromLocal(normalizedDoctype);
+        const cachedOptions = await getLinkOptionsFromLocal(cacheKey);
         if (cachedOptions && cachedOptions.length > 0) {
-          console.log('[LinkDropdown] using cached link options', {
-            doctype: normalizedDoctype,
-            count: cachedOptions.length,
-          });
           if (!cancelled) {
             hasLoadedRef.current = true;
             setAllOptions(cachedOptions);
             setSearchTerm('');
             setLoading(false);
           }
-          // If online, also fetch fresh data in background to update cache
+
+          // Background refresh
           if (isConnected) {
-            getLinkOptions({
-              path: { linked_doctype: normalizedDoctype },
-            })
-              .then(response => {
-                const raw = (response as any)?.data ?? (response as any);
-                let list: unknown[] = [];
-                if (Array.isArray(raw)) {
-                  list = raw as unknown[];
-                } else if (raw && Array.isArray(raw.data)) {
-                  list = raw.data as unknown[];
-                }
-                const normalizedOptions: string[] = list
-                  .map(item => {
-                    if (typeof item === 'string') {
-                      return item;
-                    }
-                    if (item && typeof item === 'object') {
-                      const obj = item as Record<string, unknown>;
-                      const labelCandidate =
-                        obj.label ??
-                        obj.value ??
-                        obj.name ??
-                        obj.title ??
-                        obj.id ??
-                        obj.key;
-                      if (typeof labelCandidate === 'string') {
-                        return labelCandidate;
-                      }
-                    }
-                    return undefined;
-                  })
-                  .filter(
-                    (opt): opt is string =>
-                      typeof opt === 'string' && opt.trim().length > 0
-                  )
-                  .map(opt => opt.trim());
-                if (normalizedOptions.length > 0) {
-                  saveLinkOptionsToLocal(normalizedDoctype, normalizedOptions);
-                  if (!cancelled) {
-                    setAllOptions(normalizedOptions);
-                  }
+            fetchFromApi(normalizedDoctype, filterField, filterValue)
+              .then(opts => {
+                if (opts.length > 0) {
+                  saveLinkOptionsToLocal(cacheKey, opts);
+                  if (!cancelled) setAllOptions(opts);
                 }
               })
-              .catch(err => {
-                console.warn('[LinkDropdown] failed to refresh options:', err);
-              });
+              .catch(err => console.warn('[LinkDropdown] failed to refresh options:', err));
           }
           return;
         }
 
-        // If no cache and offline, show error
         if (!isConnected) {
           if (!cancelled) {
             setError('No cached options available (offline)');
@@ -183,128 +150,87 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
           return;
         }
 
-        // Online: fetch from API
-        const response = await getLinkOptions({
-          path: { linked_doctype: normalizedDoctype },
-        });
-        console.log('[LinkDropdown] fetched link options', {
-          doctype: normalizedDoctype,
-          response,
-        });
-        // API returns unknown type; attempt to normalize common shapes
-        const raw = (response as any)?.data ?? (response as any);
-        let list: unknown[] = [];
-        if (Array.isArray(raw)) {
-          list = raw as unknown[];
-        } else if (raw && Array.isArray(raw.data)) {
-          list = raw.data as unknown[];
-        }
-        const normalizedOptions: string[] = list
-          .map(item => {
-            if (typeof item === 'string') {
-              return item;
-            }
-            if (item && typeof item === 'object') {
-              const obj = item as Record<string, unknown>;
-              const labelCandidate =
-                obj.label ??
-                obj.value ??
-                obj.name ??
-                obj.title ??
-                obj.id ??
-                obj.key;
-              if (typeof labelCandidate === 'string') {
-                return labelCandidate;
-              }
-            }
-            return undefined;
-          })
-          .filter(
-            (opt): opt is string =>
-              typeof opt === 'string' && opt.trim().length > 0
-          )
-          .map(opt => opt.trim());
-        console.log('[LinkDropdown] parsed options', {
-          total: list.length,
-          rendered: normalizedOptions.length,
-          sample: normalizedOptions.slice(0, 10),
-        });
+        const opts = await fetchFromApi(normalizedDoctype, filterField, filterValue);
         if (!cancelled) {
           hasLoadedRef.current = true;
-          setAllOptions(normalizedOptions);
+          setAllOptions(opts);
           setSearchTerm('');
-          // Cache the options for offline use
-          if (normalizedOptions.length > 0) {
-            await saveLinkOptionsToLocal(normalizedDoctype, normalizedOptions);
+          if (opts.length > 0) {
+            await saveLinkOptionsToLocal(cacheKey, opts);
           }
         }
       } catch (e) {
-        if (!cancelled) {
-          setError('Failed to load options');
-        }
+        if (!cancelled) setError('Failed to load options');
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
+
     fetchOptions();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, normalizedDoctype, allOptions.length, isConnected]);
+    return () => { cancelled = true; };
+  }, [isOpen, normalizedDoctype, cacheKey, allOptions.length, isConnected, filterField, filterValue]);
+
+  const waitingForParent = filterField && !filterValue;
 
   return (
-    <View style={containerStyle}>
+    <View style={{ zIndex: containerZIndex }}>
       <TouchableOpacity
-        className="h-[40px] w-full flex-row items-center justify-between rounded-md border px-3"
-        style={{
-          borderColor: theme.border,
-          backgroundColor: theme.background,
-        }}
+        className="h-[44px] w-full flex-row items-center justify-between rounded-lg border-[1.5px] px-4"
+        style={{ borderColor: theme.border, backgroundColor: theme.background }}
         onPress={onToggle}
       >
-        <Text
-          className="flex-1"
-          style={{
-            color: value ? theme.text : theme.subtext,
-          }}
-        >
+        <Text className="flex-1" style={{ color: value ? theme.text : theme.subtext }}>
           {value || placeholder}
         </Text>
         <ChevronDown
-          size={16}
+          size={18}
           color={theme.subtext}
-          style={{
-            transform: [{ rotate: isOpen ? '180deg' : '0deg' }],
-          }}
+          style={{ transform: [{ rotate: isOpen ? '180deg' : '0deg' }] }}
         />
       </TouchableOpacity>
 
       {isOpen && (
-        <View style={{ ...dropdownStyle, maxHeight: dropdownMaxHeight }}>
-          {loading ? (
+        <View
+          style={{
+            marginTop: 8,
+            backgroundColor: theme.dropdownBg,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 8,
+            maxHeight: 300,
+          }}
+        >
+          {waitingForParent ? (
+            <View className="px-4 py-6">
+              <Text className="text-center text-sm" style={{ color: theme.subtext }}>
+                Select {filterField} first
+              </Text>
+            </View>
+          ) : loading ? (
             <View className="items-center justify-center px-4 py-6">
               <ActivityIndicator color={theme.subtext} />
             </View>
           ) : error ? (
             <View className="px-4 py-6">
-              <Text
-                className="text-center text-sm"
-                style={{ color: theme.subtext }}
-              >
+              <Text className="text-center text-sm" style={{ color: theme.subtext }}>
                 {error}
               </Text>
             </View>
           ) : (
             <>
-              <View className="px-3 pt-3">
+              <View className="px-3 pt-3 pb-2">
                 <TextInput
-                  className="h-[40px] w-full rounded-md border px-3"
+                  className="h-[42px] w-full rounded-lg border px-4"
                   style={{
                     borderColor: theme.border,
                     backgroundColor: theme.background,
                     color: theme.text,
+                    fontSize: 15,
                   }}
                   value={searchTerm}
                   onChangeText={text => setSearchTerm(text)}
@@ -312,48 +238,34 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
                   placeholderTextColor={theme.subtext}
                 />
               </View>
-              <ScrollView nestedScrollEnabled={true} style={scrollViewStyle}>
-                {displayOptions.length > 0 ? (
-                  displayOptions.map((option: string, optIndex: number) => {
-                    const trimmedOption = (option || '').toString().trim();
-                    const isSelected = value === trimmedOption;
-                    const fontWeight = isSelected
-                      ? ('600' as const)
-                      : ('normal' as const);
-                    return (
-                      <TouchableOpacity
-                        key={`${trimmedOption}-${optIndex}`}
-                        className={`px-4 py-3 ${optIndex < displayOptions.length - 1 ? 'border-b' : ''}`}
-                        style={{
-                          backgroundColor: isSelected
-                            ? theme.dropdownSelectedBg
-                            : theme.dropdownBg,
-                          borderBottomColor:
-                            optIndex < displayOptions.length - 1
-                              ? theme.border
-                              : undefined,
-                        }}
-                        onPress={() => {
-                          onValueChange(trimmedOption);
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: theme.text,
-                            fontWeight,
-                          }}
-                        >
-                          {trimmedOption}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })
-                ) : (
-                  <View className="px-4 py-6">
-                    <Text
-                      className="text-center text-sm"
-                      style={{ color: theme.subtext }}
+              <ScrollView
+                style={{ height: 200 }}
+                nestedScrollEnabled={true}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {filteredOptions.length > 0 ? filteredOptions.map((option, optIndex) => {
+                  const trimmed = option.trim();
+                  const isSelected = value === trimmed;
+                  return (
+                    <TouchableOpacity
+                      key={`${trimmed}-${optIndex}`}
+                      className="px-4 py-3.5"
+                      style={{
+                        backgroundColor: isSelected ? theme.dropdownSelectedBg : theme.dropdownBg,
+                        borderBottomColor: theme.border,
+                        borderBottomWidth: 0.5,
+                      }}
+                      onPress={() => onValueChange(trimmed)}
                     >
+                      <Text style={{ color: theme.text, fontWeight: isSelected ? '600' : 'normal', fontSize: 15 }}>
+                        {trimmed}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                }) : (
+                  <View className="px-4 py-6">
+                    <Text className="text-center text-sm" style={{ color: theme.subtext }}>
                       No options available
                     </Text>
                   </View>
@@ -366,5 +278,44 @@ const LinkDropdown: React.FC<LinkDropdownProps> = ({
     </View>
   );
 };
+
+async function fetchFromApi(
+  doctype: string,
+  filterField?: string,
+  filterValue?: string,
+): Promise<string[]> {
+  const params: Record<string, string> = {};
+  if (filterField && filterValue) {
+    params.filter_field = filterField;
+    params.filter_value = filterValue;
+  }
+  const url = `${EXPO_PUBLIC_BACKEND_URL}/link-options/${encodeURIComponent(doctype)}`;
+
+  const doRequest = async (token: string | null) =>
+    axios.get(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      params,
+      validateStatus: () => true, // don't throw on any status
+    });
+
+  let token = await getIdToken();
+  let resp = await doRequest(token);
+
+  if (resp.status === 401) {
+    token = await getIdToken({ forceRefresh: true });
+    resp = await doRequest(token);
+  }
+
+  if (resp.status === 401 || resp.status === 412) {
+    navigateToLogin();
+    throw new Error(`Session expired (${resp.status})`);
+  }
+
+  if (resp.status !== 200) {
+    throw new Error(`Failed to fetch link options: ${resp.status}`);
+  }
+
+  return normalizeOptions(resp.data?.data ?? resp.data);
+}
 
 export default LinkDropdown;

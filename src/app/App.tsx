@@ -3,9 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StatusBar } from 'react-native';
+import { ActivityIndicator, StatusBar, Text, View } from 'react-native';
+import { useNetwork } from '../context/NetworkProvider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
@@ -18,11 +20,31 @@ import {
   getAuthTokens,
   refreshAuthTokens,
 } from '../services/auth/tokenStorage';
+import {
+  ensureSyncQueueInitialized,
+  updateSyncQueueCredentials,
+} from '../services/syncQueue';
 import Home from './navigation/BottomTabs';
 import { RootStackParamList } from './navigation/RootStackedList';
 import Login from './screens/Login';
+import { ToastView } from './components/Toast';
 
 enableScreens();
+
+function OfflineBanner() {
+  const { isConnected } = useNetwork();
+  const { isDarkMode } = useTheme();
+  if (isConnected) return null;
+  const bg   = isDarkMode ? '#431407' : '#92400e';   // orange-950 / amber-800
+  const fg   = isDarkMode ? '#fde68a' : '#ffffff';   // amber-200 / white
+  return (
+    <View style={{ backgroundColor: bg, paddingVertical: 5, alignItems: 'center' }}>
+      <Text style={{ color: fg, fontSize: 12, fontWeight: '600', letterSpacing: 0.8 }}>
+        OFFLINE MODE
+      </Text>
+    </View>
+  );
+}
 
 // Inner component that uses theme
 function AppContent(): React.JSX.Element {
@@ -82,7 +104,8 @@ function AppContent(): React.JSX.Element {
           if (isOnline) {
             try {
               console.log('[App] Refreshing tokens on startup...');
-              await refreshAuthTokens();
+              const refreshedTokens = await refreshAuthTokens();
+              await updateSyncQueueCredentials(refreshedTokens.idToken ?? null);
               console.log('[App] Tokens refreshed successfully');
               setInitialRoute('MainApp');
             } catch (tokenError) {
@@ -118,6 +141,12 @@ function AppContent(): React.JSX.Element {
       }
     };
 
+    const initQueue = async () => {
+      const tokens = await getAuthTokens();
+      await ensureSyncQueueInitialized(tokens?.idToken ?? null);
+    };
+
+    void initQueue();
     checkAuthState();
   }, []);
 
@@ -149,7 +178,8 @@ function AppContent(): React.JSX.Element {
           backgroundColor={theme.background}
         />
         <NetworkProvider>
-          <NavigationContainer>
+          <OfflineBanner />
+          <NavigationContainer ref={navigationRef}>
             <Stack.Navigator
               initialRouteName={initialRoute}
               screenOptions={{ headerShown: false }}
@@ -158,6 +188,7 @@ function AppContent(): React.JSX.Element {
               <Stack.Screen name="MainApp" component={Home} />
             </Stack.Navigator>
           </NavigationContainer>
+          <ToastView />
         </NetworkProvider>
       </SafeAreaView>
     </GestureHandlerRootView>

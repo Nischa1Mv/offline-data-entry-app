@@ -19,6 +19,8 @@ export type RawField = {
   print_hide?: number;
   report_hide?: number;
   depends_on?: string;
+  link_filters?: string;
+  reqd:number;
 };
 export interface DocType {
   data: Data;
@@ -120,6 +122,7 @@ export interface Field {
   non_negative: number;
   docType: string;
   depends_on?: string;
+  link_filters?: string;
 }
 export interface Permission {
   name: string;

@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react-native';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -11,7 +11,6 @@ interface SelectDropdownProps {
   isOpen: boolean;
   onToggle: () => void;
   containerZIndex?: number;
-  dependsOn?: string;
   formData?: Record<string, any>;
 }
 
@@ -23,88 +22,39 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
   isOpen,
   onToggle,
   containerZIndex,
-  dependsOn,
-  formData,
 }) => {
   const { theme } = useTheme();
 
   const containerStyle = {
-    position: 'relative' as const,
     zIndex: containerZIndex,
-  };
-
-  const dropdownStyle = {
-    position: 'absolute' as const,
-    top: 45,
-    left: 0,
-    right: 0,
-    zIndex: 2000,
-    backgroundColor: theme.dropdownBg,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    borderRadius: 8,
-    shadowColor: theme.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 20,
-    maxHeight: 250,
   };
 
   const scrollViewStyle = {
     maxHeight: 250,
   };
 
-  // 🔥 Compute disabled state
-  const isDisabled = React.useMemo(() => {
-    if (!dependsOn) return false;
-
-    if (dependsOn.startsWith('eval:doc.')) {
-      const regex = /^eval:doc\.([a-zA-Z0-9_]+)\s*==\s*["'](.+)["']$/;
-      const match = dependsOn.match(regex);
-
-      if (match && formData) {
-        const [_, fieldName, expectedValue] = match;
-        return formData[fieldName] !== expectedValue;
-      }
-      return true;
-    }
-
-    return false;
-  }, [dependsOn, formData]);
-
-  // 🔄 Reset value when it becomes disabled
-  useEffect(() => {
-    if (isDisabled && value !== "") {
-      onValueChange("");
-    }
-  }, [isDisabled, value]);
-
   return (
     <View style={containerStyle}>
       {/* Dropdown Toggle Button */}
       <TouchableOpacity
-        className="h-[40px] w-full flex-row items-center justify-between rounded-md border px-3"
+        className="h-[44px] w-full flex-row items-center justify-between rounded-lg border-[1.5px] px-4"
         style={{
           borderColor: theme.border,
-          backgroundColor: isDisabled ? '#373737ff' : theme.background,
-          opacity: isDisabled ? 0.5 : 1,
+          backgroundColor: theme.background,
         }}
-        onPress={() => {
-          if (!isDisabled) onToggle(); // prevent opening when disabled
-        }}
+        onPress={onToggle}
       >
         <Text
           className="flex-1"
           style={{
-            color: isDisabled ? theme.subtext : (value ? theme.text : theme.subtext),
+            color: value ? theme.text : theme.subtext,
           }}
         >
           {value || placeholder}
         </Text>
 
         <ChevronDown
-          size={16}
+          size={18}
           color={theme.subtext}
           style={{
             transform: [{ rotate: isOpen ? '180deg' : '0deg' }],
@@ -112,9 +62,24 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
         />
       </TouchableOpacity>
 
-      {/* Dropdown Options - Always render structure, only open if isOpen */}
+      {/* Pushes content down when open */}
       {isOpen && (
-        <View style={dropdownStyle}>
+        <View
+          style={{
+            marginTop: 8,
+            backgroundColor: theme.dropdownBg,
+            borderWidth: 1.5,
+            borderColor: theme.border,
+            borderRadius: 12,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 8,
+            maxHeight: 250,
+            overflow: 'hidden',
+          }}
+        >
           <ScrollView nestedScrollEnabled={true} style={scrollViewStyle}>
             {options.length > 0 ? (
               options.map((option: string, optIndex: number) => {
@@ -124,22 +89,22 @@ const SelectDropdown: React.FC<SelectDropdownProps> = ({
                 return (
                   <TouchableOpacity
                     key={optIndex}
-                    className={`px-4 py-3 ${optIndex < options.length - 1 ? 'border-b' : ''}`}
+                    className={`px-4 py-3.5 ${optIndex < options.length - 1 ? 'border-b' : ''}`}
                     style={{
                       backgroundColor: isSelected
                         ? theme.dropdownSelectedBg
                         : theme.dropdownBg,
                       borderBottomColor:
                         optIndex < options.length - 1 ? theme.border : undefined,
+                      borderBottomWidth: optIndex < options.length - 1 ? 0.5 : 0,
                     }}
-                    onPress={() => {
-                      if (!isDisabled) onValueChange(trimmedOption);
-                    }}
+                    onPress={() => onValueChange(trimmedOption)}
                   >
                     <Text
                       style={{
                         color: theme.text,
-                        fontWeight: isSelected ? '600' : 'normal',
+                        fontWeight: isSelected ? '600' : '400',
+                        fontSize: 15,
                       }}
                     >
                       {trimmedOption}
