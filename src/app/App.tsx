@@ -6,7 +6,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { navigationRef } from './navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StatusBar } from 'react-native';
+import { ActivityIndicator, StatusBar, Text, View } from 'react-native';
+import { useNetwork } from '../context/NetworkProvider';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { enableScreens } from 'react-native-screens';
@@ -24,6 +25,18 @@ import { RootStackParamList } from './navigation/RootStackedList';
 import Login from './screens/Login';
 
 enableScreens();
+
+function OfflineBanner() {
+  const { isConnected } = useNetwork();
+  if (isConnected) return null;
+  return (
+    <View style={{ backgroundColor: '#f59e0b', paddingVertical: 4, alignItems: 'center' }}>
+      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', letterSpacing: 0.5 }}>
+        OFFLINE MODE
+      </Text>
+    </View>
+  );
+}
 
 // Inner component that uses theme
 function AppContent(): React.JSX.Element {
@@ -150,6 +163,7 @@ function AppContent(): React.JSX.Element {
           backgroundColor={theme.background}
         />
         <NetworkProvider>
+          <OfflineBanner />
           <NavigationContainer ref={navigationRef}>
             <Stack.Navigator
               initialRouteName={initialRoute}
