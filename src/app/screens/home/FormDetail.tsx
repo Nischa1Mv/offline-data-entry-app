@@ -42,6 +42,8 @@ import HeadingText from '../../components/fields/HeadingText';
 import PhoneInput from '../../components/fields/PhoneInput';
 import SectionBreak from '../../components/fields/SectionBreak';
 import { enqueue } from '../../pendingQueue';
+import { processQueue } from '../../../services/submissionService';
+import { toast } from '../../../lib/toast';
 
 type FormDetailRouteProp = RouteProp<HomeStackParamList, 'FormDetail'>;
 type FormDetailNavigationProp = NativeStackNavigationProp<
@@ -331,6 +333,11 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
       isSubmittedRef.current = true;
       await AsyncStorage.removeItem('tempFormData');
       setFormData({});
+      if (isConnected) {
+        processQueue().catch(e => console.warn('[FormDetail] Auto-submit failed:', e));
+      } else {
+        toast.show('Saved — will send when back online', 'pending');
+      }
       setTimeout(() => {
         navigation.goBack();
       }, 100);

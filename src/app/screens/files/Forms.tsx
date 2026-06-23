@@ -1,8 +1,9 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   ScrollView,
@@ -16,6 +17,7 @@ import { SubmissionItem } from '../../../types';
 import LanguageControl from '../../components/LanguageControl';
 import { FormStackParamList } from '../../navigation/FormStackParamList';
 import { getQueue, removeFromQueue } from '../../pendingQueue';
+import { queueEvents } from '../../../lib/queueEvents';
 // import { submitFormData } from '../../../lib/hey-api/client/sdk.gen';
 import { EXPO_PUBLIC_BACKEND_URL } from '@env';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -65,6 +67,11 @@ function Forms() {
       fetchPendingForms();
     }, [])
   );
+
+  // Refresh list whenever processQueue removes items (e.g. auto-submit on reconnect)
+  useEffect(() => {
+    return queueEvents.subscribe(() => fetchPendingForms());
+  }, []);
 
   const fetchPendingForms = async () => {
     try {
@@ -730,9 +737,7 @@ function Forms() {
 
         {isLoading ? (
           <View className="flex items-center justify-center py-8">
-            <Text style={{ color: theme.subtext }}>
-              {t('formsScreen.loadingPendingForms')}
-            </Text>
+            <ActivityIndicator size="large" color={theme.subtext} />
           </View>
         ) : queueData.length === 0 ? (
           <View className="flex items-center justify-center py-8">

@@ -18,6 +18,8 @@ import {
   refreshAuthTokens,
   saveAuthTokens,
 } from '../../services/auth/tokenStorage';
+import { processQueue } from '../../services/submissionService';
+import { updateSyncQueueCredentials } from '../../services/syncQueue';
 
 type LoginScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -86,6 +88,10 @@ const Login: React.FC<Props> = ({ navigation }) => {
       }
 
       navigation.navigate('MainApp');
+
+      // Wire fresh token into sync queue then flush pending forms
+      updateSyncQueueCredentials(data.idToken).catch(() => {});
+      processQueue().catch(e => console.warn('[Login] Auto-submit failed:', e));
 
       if (data.user?.name) {
         Alert.alert('Success', `Welcome ${data.user.name}!`);

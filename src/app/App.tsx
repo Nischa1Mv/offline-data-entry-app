@@ -20,18 +20,26 @@ import {
   getAuthTokens,
   refreshAuthTokens,
 } from '../services/auth/tokenStorage';
+import {
+  ensureSyncQueueInitialized,
+  updateSyncQueueCredentials,
+} from '../services/syncQueue';
 import Home from './navigation/BottomTabs';
 import { RootStackParamList } from './navigation/RootStackedList';
 import Login from './screens/Login';
+import { ToastView } from './components/Toast';
 
 enableScreens();
 
 function OfflineBanner() {
   const { isConnected } = useNetwork();
+  const { isDarkMode } = useTheme();
   if (isConnected) return null;
+  const bg   = isDarkMode ? '#431407' : '#92400e';   // orange-950 / amber-800
+  const fg   = isDarkMode ? '#fde68a' : '#ffffff';   // amber-200 / white
   return (
-    <View style={{ backgroundColor: '#f59e0b', paddingVertical: 4, alignItems: 'center' }}>
-      <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600', letterSpacing: 0.5 }}>
+    <View style={{ backgroundColor: bg, paddingVertical: 5, alignItems: 'center' }}>
+      <Text style={{ color: fg, fontSize: 12, fontWeight: '600', letterSpacing: 0.8 }}>
         OFFLINE MODE
       </Text>
     </View>
@@ -96,7 +104,8 @@ function AppContent(): React.JSX.Element {
           if (isOnline) {
             try {
               console.log('[App] Refreshing tokens on startup...');
-              await refreshAuthTokens();
+              const refreshedTokens = await refreshAuthTokens();
+              await updateSyncQueueCredentials(refreshedTokens.idToken ?? null);
               console.log('[App] Tokens refreshed successfully');
               setInitialRoute('MainApp');
             } catch (tokenError) {
@@ -132,6 +141,12 @@ function AppContent(): React.JSX.Element {
       }
     };
 
+    const initQueue = async () => {
+      const tokens = await getAuthTokens();
+      await ensureSyncQueueInitialized(tokens?.idToken ?? null);
+    };
+
+    void initQueue();
     checkAuthState();
   }, []);
 
@@ -173,6 +188,7 @@ function AppContent(): React.JSX.Element {
               <Stack.Screen name="MainApp" component={Home} />
             </Stack.Navigator>
           </NavigationContainer>
+          <ToastView />
         </NetworkProvider>
       </SafeAreaView>
     </GestureHandlerRootView>
