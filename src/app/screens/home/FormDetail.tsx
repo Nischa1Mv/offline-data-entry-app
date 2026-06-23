@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ArrowLeft } from 'lucide-react-native';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -53,6 +53,18 @@ type Props = {
   navigation: FormDetailNavigationProp;
 };
 
+function parseLinkFilters(
+  link_filters: string
+): { filterField: string; parentFormField: string } | null {
+  try {
+    const [[, field, , value]] = JSON.parse(link_filters);
+    if (typeof value === 'string' && value.startsWith('eval:doc.')) {
+      return { filterField: field, parentFormField: value.replace('eval:doc.', '') };
+    }
+  } catch {}
+  return null;
+}
+
 const FormDetail: React.FC<Props> = ({ navigation }) => {
   //this is the network status , make it true/false to simulate offline/online
   const { isConnected } = useNetwork();
@@ -68,6 +80,52 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const isSubmittedRef = useRef(false);
+
+  // For each Link field: explicit link_filters from ERP, or auto-inferred from
+  // same-doctype chains (e.g. multiple Territory fields → filter by parent_territory).
+  const { linkDependencyMap, autoLinkDeps } = useMemo(() => {
+    // Group Link fields by target doctype, preserving form order
+    const byDoctype: Record<string, string[]> = {};
+    for (const field of fields) {
+      if (field.fieldtype === 'Link' && field.options) {
+        (byDoctype[field.options.trim()] ??= []).push(field.fieldname);
+      }
+    }
+
+    const auto: Record<string, { filterField: string; parentFormField: string }> = {};
+    for (const [doctype, group] of Object.entries(byDoctype)) {
+      if (group.length < 1) continue;
+      const filterField = `parent_${doctype.toLowerCase().replace(/ /g, '_')}`;
+
+      // Wire group[1..n] → previous in chain
+      for (let i = 1; i < group.length; i++) {
+        auto[group[i]] = { filterField, parentFormField: group[i - 1] };
+      }
+
+      // Wire group[0] → nearest preceding Select/Link field (e.g. state Select → district)
+      const firstIdx = fields.findIndex(f => f.fieldname === group[0]);
+      for (let k = firstIdx - 1; k >= 0; k--) {
+        const pre = fields[k];
+        if (pre.fieldtype === 'Section Break' || pre.fieldtype === 'Column Break') continue;
+        if (pre.fieldtype === 'Select' || pre.fieldtype === 'Link') {
+          auto[group[0]] = { filterField, parentFormField: pre.fieldname };
+        }
+        break;
+      }
+    }
+
+    const map: Record<string, string[]> = {};
+    for (const field of fields) {
+      if (field.fieldtype !== 'Link') continue;
+      const dep = field.link_filters
+        ? parseLinkFilters(field.link_filters)
+        : (auto[field.fieldname] ?? null);
+      if (dep) {
+        (map[dep.parentFormField] ??= []).push(field.fieldname);
+      }
+    }
+    return { linkDependencyMap: map, autoLinkDeps: auto };
+  }, [fields]);
 
   // Helper function to check if a field should be enabled based on depends_on
   const isFieldEnabled = useCallback((field: RawField) => {
@@ -371,16 +429,18 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
   }, [formData]);
 
   const handleChange = async (fieldname: string, value: any) => {
-    const updated = { ...formData, [fieldname]: value };
+    let updated = { ...formData, [fieldname]: value };
+    const clearDependents = (name: string) => {
+      for (const child of linkDependencyMap[name] ?? []) {
+        updated[child] = '';
+        clearDependents(child);
+      }
+    };
+    clearDependents(fieldname);
     setFormData(updated);
-    //store the temp data on every change
     await AsyncStorage.setItem('tempFormData', JSON.stringify(updated));
-    // Close dropdown after selection
     if (dropdownStates[fieldname]) {
-      setDropdownStates(prev => ({
-        ...prev,
-        [fieldname]: false,
-      }));
+      setDropdownStates(prev => ({ ...prev, [fieldname]: false }));
     }
   };
 
@@ -472,6 +532,11 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                       .filter((opt: string) => opt.trim())
                     : [];
                 const isLinkField = field.fieldtype === 'Link' && field.options;
+                const linkDep = isLinkField
+                  ? (field.link_filters
+                    ? parseLinkFilters(field.link_filters)
+                    : (autoLinkDeps[field.fieldname] ?? null))
+                  : null;
                 const isDateField = field.fieldtype === 'Date';
                 const isTableField = field.fieldtype === 'Table';
                 const isOpen = dropdownStates[field.fieldname] || false;
@@ -532,6 +597,8 @@ const FormDetail: React.FC<Props> = ({ navigation }) => {
                         isOpen={isOpen}
                         onToggle={() => toggleDropdown(field.fieldname)}
                         containerZIndex={1000 - index}
+                        filterField={linkDep?.filterField}
+                        filterValue={linkDep ? (formData[linkDep.parentFormField] ?? '') : undefined}
                       />
                     ) : isDateField ? (
                       <DatePicker
